@@ -1,9 +1,10 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useTodosStore } from '../stores/todos';
 import type { StageId, Todo } from '../data/stages';
 import AddTaskSheet from './AddTaskSheet.vue';
 import BasicDropdown from './BasicDropdown.vue';
+import TaskDetailSheet from './TaskDetailSheet.vue';
 import TodoItem from './TodoItem.vue';
 
 type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -45,22 +46,13 @@ const filterOptions: Array<{ value: FilterMode; label: string }> = [
   { value: 'overdue', label: 'Overdue' },
   { value: 'completed', label: 'Completed' }
 ];
+
 const draggingTodoId = ref<string | null>(null);
-const detailClientTagsListId = computed(() => `detail-client-tags-${props.stageId}`);
 const isAddTaskSheetOpen = ref(false);
 const selectedTodoId = ref<string | null>(null);
-const detailTitle = ref('');
-const detailDueDate = ref('');
-const detailClientTag = ref('');
-const detailLink = ref('');
-const detailContent = ref('');
-const detailContentInput = ref<HTMLTextAreaElement | null>(null);
-const showContentPreview = ref(false);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
-const selectedTodo = computed(() =>
-  todos.value.find((todo) => todo.id === selectedTodoId.value) ?? null
-);
+const selectedTodo = computed(() => todos.value.find((todo) => todo.id === selectedTodoId.value) ?? null);
 
 const dayBoundaries = () => {
   const now = new Date();
@@ -71,7 +63,6 @@ const dayBoundaries = () => {
 
 const filteredTodos = computed(() => {
   const { start, end } = dayBoundaries();
-
   const list = [...todos.value];
 
   list.sort((a, b) => {
@@ -124,23 +115,16 @@ const submitFromSheet = (payload: { text: string; dueDate: string; clientTag: st
 };
 
 const openDetails = (todoId: string): void => {
-  const todo = todos.value.find((item) => item.id === todoId);
-  if (!todo) {
+  if (!todos.value.some((item) => item.id === todoId)) {
     return;
   }
 
   isAddTaskSheetOpen.value = false;
-  selectedTodoId.value = todo.id;
-  detailTitle.value = todo.text;
-  detailDueDate.value = todo.dueAt ? formatDateInput(todo.dueAt) : '';
-  detailClientTag.value = todo.clientTag ?? '';
-  detailLink.value = todo.link ?? '';
-  detailContent.value = todo.content ?? '';
+  selectedTodoId.value = todoId;
 };
 
 const closeDetails = (): void => {
   selectedTodoId.value = null;
-  showContentPreview.value = false;
 };
 
 const deleteSelectedTodo = (): void => {
@@ -153,154 +137,21 @@ const deleteSelectedTodo = (): void => {
   closeDetails();
 };
 
-const normalizeBulletLines = (value: string): string => {
-  return value
-    .split('\n')
-    .map((line) => {
-      const match = line.match(/^(\s*)(?:[-*]|•)\s+(.*)$/);
-      if (!match) {
-        return line;
-      }
-      return `${match[1]}- ${match[2]}`;
-    })
-    .join('\n');
-};
-
-const saveDetails = (): void => {
+const updateDetails = (updates: {
+  text?: string;
+  dueAt?: number;
+  done?: boolean;
+  clientTag?: string;
+  link?: string;
+  content?: string;
+}): void => {
   const todo = selectedTodo.value;
   if (!todo) {
     return;
   }
 
-  const trimmedTitle = detailTitle.value.trim();
-  if (!trimmedTitle) {
-    return;
-  }
-
-  store.updateTodo(props.stageId, todo.id, {
-    text: trimmedTitle,
-    dueAt: parseDate(detailDueDate.value),
-    clientTag: detailClientTag.value,
-    link: detailLink.value,
-    content: normalizeBulletLines(detailContent.value)
-  });
+  store.updateTodo(props.stageId, todo.id, updates);
 };
-
-const toggleDetailsDone = (done: boolean): void => {
-  const todo = selectedTodo.value;
-  if (!todo) {
-    return;
-  }
-
-  store.updateTodo(props.stageId, todo.id, { done });
-};
-
-const onContentInput = (): void => {
-  const normalized = normalizeBulletLines(detailContent.value);
-  if (normalized !== detailContent.value) {
-    detailContent.value = normalized;
-  }
-
-  saveDetails();
-};
-
-const wrapContentSelectionBold = (): void => {
-  const input = detailContentInput.value;
-  if (!input) {
-    return;
-  }
-
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const selected = detailContent.value.slice(start, end);
-  const before = detailContent.value.slice(0, start);
-  const after = detailContent.value.slice(end);
-  const insert = `**${selected || 'bold text'}**`;
-  detailContent.value = `${before}${insert}${after}`;
-
-  void nextTick(() => {
-    const focusStart = start + 2;
-    const focusEnd = selected ? end + 2 : start + 11;
-    input.focus();
-    input.setSelectionRange(focusStart, focusEnd);
-  });
-
-  saveDetails();
-};
-
-const onContentKeydown = (event: KeyboardEvent): void => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
-    event.preventDefault();
-    wrapContentSelectionBold();
-  }
-};
-
-const insertBulletAtCaret = (): void => {
-  const input = detailContentInput.value;
-  if (!input) {
-    return;
-  }
-
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const before = detailContent.value.slice(0, start);
-  const after = detailContent.value.slice(end);
-  const prefix = start === 0 || detailContent.value[start - 1] === '\n' ? '- ' : '\n- ';
-
-  detailContent.value = `${before}${prefix}${after}`;
-
-  void nextTick(() => {
-    const cursor = start + prefix.length;
-    input.focus();
-    input.setSelectionRange(cursor, cursor);
-  });
-
-  saveDetails();
-};
-
-type ContentSegment = {
-  text: string;
-  bold: boolean;
-};
-
-type ContentLine = {
-  isBullet: boolean;
-  segments: ContentSegment[];
-};
-
-const splitBoldSegments = (text: string): ContentSegment[] => {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-  return parts.map((part) => {
-    const isBold = /^\*\*[^*]+\*\*$/.test(part);
-    return {
-      text: isBold ? part.slice(2, -2) : part,
-      bold: isBold
-    };
-  });
-};
-
-const contentPreview = computed<ContentLine[]>(() => {
-  if (!detailContent.value.trim()) {
-    return [];
-  }
-
-  return detailContent.value.split('\n').map((line) => {
-    const bulletMatch = line.match(/^\s*-\s+(.*)$/);
-    const text = bulletMatch ? bulletMatch[1] : line;
-    return {
-      isBullet: Boolean(bulletMatch),
-      segments: splitBoldSegments(text)
-    };
-  });
-});
-
-const detailCreatedLabel = computed(() => {
-  if (!selectedTodo.value) {
-    return '';
-  }
-
-  return new Date(selectedTodo.value.createdAt).toLocaleString();
-});
 
 const onDragStart = (todoId: string) => {
   draggingTodoId.value = todoId;
@@ -361,180 +212,13 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       Add Task
     </button>
 
-    <div v-if="selectedTodo" class="fixed inset-0 z-50 bg-slate-100/95 md:p-8" role="dialog" aria-modal="true">
-      <div class="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col bg-white shadow-xl ring-1 ring-slate-200 md:h-[calc(100dvh-4rem)] md:rounded-2xl">
-        <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white p-3 sm:p-4">
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-            aria-label="Back"
-            title="Back"
-            @click="closeDetails"
-          >
-            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          <div class="flex items-center gap-1.5 sm:gap-2">
-            <label class="inline-flex items-center gap-2 text-xs text-slate-700 sm:text-sm">
-              <input
-                type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 accent-blue-600"
-                :checked="selectedTodo.done"
-                @change="toggleDetailsDone(($event.target as HTMLInputElement).checked)"
-              />
-              Completed
-            </label>
-            <button
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50"
-              aria-label="Delete task"
-              title="Delete"
-              @click="deleteSelectedTodo"
-            >
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M19 6l-1 14H6L5 6" />
-                <path d="M10 11v6" />
-                <path d="M14 11v6" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="flex-1 overflow-y-auto p-3 sm:p-4">
-          <div class="space-y-3">
-          <input
-            v-model="detailTitle"
-            type="text"
-            class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-lg font-semibold text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-xl"
-            placeholder="Task title"
-            @input="saveDetails"
-          />
-
-          <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <input
-              v-model="detailDueDate"
-              type="date"
-              class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-              aria-label="Due date"
-              @change="saveDetails"
-            />
-            <input
-              v-model="detailClientTag"
-              type="text"
-              :list="detailClientTagsListId"
-              placeholder="Client tag"
-              class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-              aria-label="Client tag"
-              @change="saveDetails"
-            />
-            <datalist :id="detailClientTagsListId">
-              <option v-for="tag in store.clientTags" :key="tag" :value="tag" />
-            </datalist>
-            <input
-              v-model="detailLink"
-              type="url"
-              placeholder="Link"
-              class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2 md:col-span-2"
-              aria-label="Task link"
-              @change="saveDetails"
-            />
-          </div>
-
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            Created {{ detailCreatedLabel }}
-          </div>
-          <div class="mt-5">
-            <div class="mb-2 flex items-center justify-between gap-3">
-              <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-700">Full Content</h3>
-            </div>
-          <textarea
-            ref="detailContentInput"
-            v-model="detailContent"
-            rows="12"
-            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-            placeholder="Write notes. Start a line with - or * for bullets. Use **bold** or Ctrl/Cmd+B."
-            @input="onContentInput"
-            @keydown="onContentKeydown"
-          />
-
-          <div v-if="showContentPreview" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p class="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Formatted Preview</p>
-            <div v-if="contentPreview.length" class="space-y-1 text-sm text-slate-800">
-              <div
-                v-for="(line, index) in contentPreview"
-                :key="index"
-                class="flex items-start gap-2"
-                :class="{ 'pl-0': !line.isBullet }"
-              >
-                <span v-if="line.isBullet" class="mt-[1px] text-slate-500">&bull;</span>
-                <span>
-                  <template v-for="(segment, segmentIndex) in line.segments" :key="`${index}-${segmentIndex}`">
-                    <strong v-if="segment.bold">{{ segment.text }}</strong>
-                    <span v-else>{{ segment.text }}</span>
-                  </template>
-                </span>
-              </div>
-            </div>
-            <p v-else class="text-sm text-slate-400">No content yet.</p>
-          </div>
-          </div>
-        </div>
-        </div>
-
-        <div class="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t border-slate-200 bg-white p-3 sm:p-4">
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-              title="Bold (Ctrl/Cmd+B)"
-              aria-label="Bold"
-              @click="wrapContentSelectionBold"
-            >
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M7 6h7a3 3 0 010 6H7z" />
-                <path d="M7 12h8a3 3 0 010 6H7z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-              title="Insert bullet"
-              aria-label="Insert bullet"
-              @click="insertBulletAtCaret"
-            >
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 6h13" />
-                <path d="M8 12h13" />
-                <path d="M8 18h13" />
-                <path d="M3 6h.01" />
-                <path d="M3 12h.01" />
-                <path d="M3 18h.01" />
-              </svg>
-            </button>
-          </div>
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-            :aria-label="showContentPreview ? 'Hide preview' : 'Show preview'"
-            :title="showContentPreview ? 'Hide preview' : 'Show preview'"
-            @click="showContentPreview = !showContentPreview"
-          >
-            <svg v-if="showContentPreview" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 3l18 18" />
-              <path d="M10.6 10.6a3 3 0 004.2 4.2" />
-              <path d="M9.9 5.1A10.9 10.9 0 0121 12a10.9 10.9 0 01-4.1 5.1" />
-              <path d="M6.7 6.7A10.9 10.9 0 003 12a10.9 10.9 0 004.1 5.1" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
+    <TaskDetailSheet
+      :visible="Boolean(selectedTodo)"
+      :todo="selectedTodo"
+      :client-tags="store.clientTags"
+      @close="closeDetails"
+      @delete="deleteSelectedTodo"
+      @update="updateDetails"
+    />
   </section>
 </template>
