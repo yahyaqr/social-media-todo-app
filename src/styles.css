@@ -30,15 +30,6 @@ input[type='date'] {
   line-height: 1.2;
 }
 
-/* Normalize native date control so explicit height/padding are respected. */
-input[type='date'].date-input {
-  -webkit-appearance: none;
-  appearance: none;
-  min-height: 44px;
-  height: 48px;
-  padding-block: 10px;
-}
-
 * {
   -webkit-tap-highlight-color: transparent;
 }
