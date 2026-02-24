@@ -14,6 +14,7 @@ export type Todo = {
   dueAt?: number;
   clientTag?: string;
   link?: string;
+  content?: string;
 };
 
 export const stages: Stage[] = [

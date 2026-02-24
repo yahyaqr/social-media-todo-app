@@ -29,6 +29,20 @@ const normalizeClientTag = (value?: string): string | undefined => {
   return trimmed || undefined;
 };
 
+const normalizeContent = (value?: string): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const normalized = value
+    .split('\n')
+    .map((line) => line.replace(/\s+$/g, ''))
+    .join('\n')
+    .trim();
+
+  return normalized || undefined;
+};
+
 const buildClientTagCatalog = (todosByStage: TodosByStage, existing: string[] = []): string[] => {
   const tags = new Set(existing.map((tag) => tag.trim()).filter(Boolean));
 
@@ -97,7 +111,8 @@ export const useTodosStore = defineStore('todos', () => {
     text: string,
     dueAt?: number,
     clientTag?: string,
-    link?: string
+    link?: string,
+    content?: string
   ): void => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -106,6 +121,7 @@ export const useTodosStore = defineStore('todos', () => {
 
     const normalizedClientTag = normalizeClientTag(clientTag);
     const normalizedLink = normalizeLink(link);
+    const normalizedContent = normalizeContent(content);
 
     rememberClientTag(normalizedClientTag);
 
@@ -116,7 +132,8 @@ export const useTodosStore = defineStore('todos', () => {
       createdAt: Date.now(),
       dueAt,
       clientTag: normalizedClientTag,
-      link: normalizedLink
+      link: normalizedLink,
+      content: normalizedContent
     });
   };
 
@@ -136,6 +153,7 @@ export const useTodosStore = defineStore('todos', () => {
       done?: boolean;
       clientTag?: string;
       link?: string;
+      content?: string;
     }
   ): void => {
     const todo = todosByStage.value[stageId].find((item) => item.id === todoId);
@@ -162,6 +180,10 @@ export const useTodosStore = defineStore('todos', () => {
 
     if (Object.prototype.hasOwnProperty.call(updates, 'link')) {
       todo.link = normalizeLink(updates.link);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'content')) {
+      todo.content = normalizeContent(updates.content);
     }
 
     if (updates.done !== undefined) {

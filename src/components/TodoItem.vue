@@ -9,6 +9,7 @@ type TodoUpdates = {
   done?: boolean;
   clientTag?: string;
   link?: string;
+  content?: string;
 };
 
 const props = defineProps<{
@@ -23,6 +24,7 @@ const emit = defineEmits<{
   remove: [stageId: StageId, todoId: string];
   dragStart: [todoId: string];
   dragDrop: [targetId: string];
+  openDetails: [todoId: string];
   updateTodo: [stageId: StageId, todoId: string, updates: TodoUpdates];
 }>();
 
@@ -203,13 +205,14 @@ const timingClass = computed(() => {
       </template>
 
       <template v-else>
-        <label
-          :for="todo.id"
-          class="block text-base leading-6 text-slate-800"
+        <button
+          type="button"
+          class="block w-full text-left text-base leading-6 text-slate-800"
           :class="{ 'text-slate-400 line-through': todo.done }"
+          @click="emit('openDetails', todo.id)"
         >
           {{ todo.text }}
-        </label>
+        </button>
         <p v-if="dueLabel" class="mt-1 text-xs" :class="isOverdue ? 'text-rose-600' : 'text-slate-500'">
           Due {{ dueLabel }}
         </p>
