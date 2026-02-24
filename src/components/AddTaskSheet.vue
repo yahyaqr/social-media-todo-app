@@ -122,7 +122,7 @@ const selectClientTag = (tag: string): void => {
         <input
           v-model="dueDate"
           type="date"
-          class="date-input add-task-date-input min-h-12 block w-full max-w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
+          class="add-task-date-input min-h-12 block w-full max-w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
           aria-label="Due date"
         />
 
@@ -176,6 +176,11 @@ const selectClientTag = (tag: string): void => {
 .add-task-date-input {
   box-sizing: border-box;
   max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+  height: 48px;
+  padding-block: 10px;
 }
 
 .sheet-up-enter-active,
