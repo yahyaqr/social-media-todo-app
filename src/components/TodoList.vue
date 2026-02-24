@@ -330,7 +330,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <select
       id="todo-filter"
       v-model="filter"
-      class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none ring-blue-300 focus:ring-2"
+      class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none ring-blue-300 focus:ring-2"
     >
       <option v-for="option in filterOptions" :key="option.value" :value="option.value">
         {{ option.label }}
@@ -358,10 +358,14 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <button
       v-if="!selectedTodo && !isAddTaskSheetOpen"
       type="button"
-      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-12 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98] sm:right-6"
+      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98] sm:right-6"
       @click="openAddTaskSheet"
     >
-      Add Task +
+      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+      Add Task
     </button>
 
     <div v-if="selectedTodo" class="fixed inset-0 z-50 bg-slate-100/95 md:p-8" role="dialog" aria-modal="true">
@@ -369,11 +373,14 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white p-3 sm:p-4">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+            aria-label="Back"
+            title="Back"
             @click="closeDetails"
           >
-            <span aria-hidden="true">&larr;</span>
-            Back
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
           </button>
           <div class="flex items-center gap-1.5 sm:gap-2">
             <label class="inline-flex items-center gap-2 text-xs text-slate-700 sm:text-sm">
@@ -387,10 +394,18 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
             </label>
             <button
               type="button"
-              class="inline-flex h-8 items-center justify-center rounded-lg border border-rose-300 px-2.5 text-xs font-medium text-rose-700 hover:bg-rose-50 sm:h-9 sm:px-3 sm:text-sm"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50"
+              aria-label="Delete task"
+              title="Delete"
               @click="deleteSelectedTodo"
             >
-              Delete
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+              </svg>
             </button>
           </div>
         </div>
@@ -480,27 +495,50 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
               title="Bold (Ctrl/Cmd+B)"
+              aria-label="Bold"
               @click="wrapContentSelectionBold"
             >
-              Bold
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 6h7a3 3 0 010 6H7z" />
+                <path d="M7 12h8a3 3 0 010 6H7z" />
+              </svg>
             </button>
             <button
               type="button"
-              class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
               title="Insert bullet"
+              aria-label="Insert bullet"
               @click="insertBulletAtCaret"
             >
-              Bullet
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 6h13" />
+                <path d="M8 12h13" />
+                <path d="M8 18h13" />
+                <path d="M3 6h.01" />
+                <path d="M3 12h.01" />
+                <path d="M3 18h.01" />
+              </svg>
             </button>
           </div>
           <button
             type="button"
-            class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+            :aria-label="showContentPreview ? 'Hide preview' : 'Show preview'"
+            :title="showContentPreview ? 'Hide preview' : 'Show preview'"
             @click="showContentPreview = !showContentPreview"
           >
-            {{ showContentPreview ? 'Hide Preview' : 'Show Preview' }}
+            <svg v-if="showContentPreview" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3l18 18" />
+              <path d="M10.6 10.6a3 3 0 004.2 4.2" />
+              <path d="M9.9 5.1A10.9 10.9 0 0121 12a10.9 10.9 0 01-4.1 5.1" />
+              <path d="M6.7 6.7A10.9 10.9 0 003 12a10.9 10.9 0 004.1 5.1" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
         </div>
       </div>
