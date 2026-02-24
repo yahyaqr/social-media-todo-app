@@ -71,7 +71,7 @@ const timingClass = computed(() => {
 
 <template>
   <li
-    class="flex cursor-pointer items-start gap-3 rounded-xl border p-3 shadow-sm transition hover:shadow"
+    class="flex cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 shadow-sm transition hover:shadow sm:gap-3 sm:p-3"
     :class="[timingClass, { 'opacity-50': dragging }]"
     draggable="true"
     @click="openDetails"
@@ -83,19 +83,19 @@ const timingClass = computed(() => {
       :id="todo.id"
       type="checkbox"
       :checked="todo.done"
-      class="mt-0.5 h-5 w-5 rounded border-slate-300 text-blue-600 accent-blue-600"
+      class="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 accent-blue-600"
       @click.stop
       @change="emit('toggle', stageId, todo.id)"
     />
 
     <div class="min-w-0 flex-1">
       <p
-        class="line-clamp-2 text-sm leading-5 font-medium text-slate-800"
+        class="line-clamp-2 text-sm font-medium leading-5 text-slate-800 sm:text-[0.95rem]"
         :class="{ 'text-slate-400 line-through': todo.done }"
       >
         {{ todo.text }}
       </p>
-      <div v-if="dueLabel || todo.clientTag || todo.link" class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+      <div v-if="dueLabel || todo.clientTag || todo.link" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
         <span
           v-if="dueLabel"
           class="rounded-full px-2 py-0.5"

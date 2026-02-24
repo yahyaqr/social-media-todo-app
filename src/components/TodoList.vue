@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import { useTodosStore } from '../stores/todos';
 import type { StageId, Todo } from '../data/stages';
@@ -50,6 +50,7 @@ const detailClientTag = ref('');
 const detailLink = ref('');
 const detailContent = ref('');
 const detailContentInput = ref<HTMLTextAreaElement | null>(null);
+const showContentPreview = ref(false);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
 const selectedTodo = computed(() =>
@@ -171,6 +172,7 @@ const openDetails = (todoId: string): void => {
 
 const closeDetails = (): void => {
   selectedTodoId.value = null;
+  showContentPreview.value = false;
 };
 
 const deleteSelectedTodo = (): void => {
@@ -191,7 +193,7 @@ const normalizeBulletLines = (value: string): string => {
       if (!match) {
         return line;
       }
-      return `${match[1]}• ${match[2]}`;
+      return `${match[1]}- ${match[2]}`;
     })
     .join('\n');
 };
@@ -265,6 +267,29 @@ const onContentKeydown = (event: KeyboardEvent): void => {
   }
 };
 
+const insertBulletAtCaret = (): void => {
+  const input = detailContentInput.value;
+  if (!input) {
+    return;
+  }
+
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const before = detailContent.value.slice(0, start);
+  const after = detailContent.value.slice(end);
+  const prefix = start === 0 || detailContent.value[start - 1] === '\n' ? '- ' : '\n- ';
+
+  detailContent.value = `${before}${prefix}${after}`;
+
+  void nextTick(() => {
+    const cursor = start + prefix.length;
+    input.focus();
+    input.setSelectionRange(cursor, cursor);
+  });
+
+  saveDetails();
+};
+
 type ContentSegment = {
   text: string;
   bold: boolean;
@@ -292,7 +317,7 @@ const contentPreview = computed<ContentLine[]>(() => {
   }
 
   return detailContent.value.split('\n').map((line) => {
-    const bulletMatch = line.match(/^\s*•\s+(.*)$/);
+    const bulletMatch = line.match(/^\s*-\s+(.*)$/);
     const text = bulletMatch ? bulletMatch[1] : line;
     return {
       isBullet: Boolean(bulletMatch),
@@ -326,18 +351,18 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
 </script>
 
 <template>
-  <section class="rounded-2xl bg-slate-50 p-4 shadow-sm ring-1 ring-slate-200">
-    <form class="space-y-2" @submit.prevent="submitTodo">
+  <section class="rounded-2xl bg-slate-50 p-3 shadow-sm ring-1 ring-slate-200 sm:p-4">
+    <form class="space-y-2.5" @submit.prevent="submitTodo">
       <div class="flex gap-2">
         <input
           v-model="newTodoText"
           type="text"
           placeholder="Add a task..."
-          class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          class="min-h-12 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
         />
         <button
           type="submit"
-          class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition active:scale-[0.98]"
+          class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition active:scale-[0.98]"
           aria-label="Add todo"
           title="Add todo"
         >
@@ -351,7 +376,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         <input
           v-model="dueDate"
           type="date"
-          class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 focus:ring-2"
+          class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
           aria-label="Due date"
         />
       </div>
@@ -361,7 +386,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
             v-model="clientTag"
             type="text"
             placeholder="Client tag (optional)"
-            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+            class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
             aria-label="Client tag"
             @focus="onClientTagFocus"
             @blur="onClientTagBlur"
@@ -388,23 +413,27 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
           v-model="link"
           type="url"
           placeholder="Link (optional)"
-          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
           aria-label="Link"
         />
       </div>
     </form>
 
-    <div class="mt-4 flex items-center gap-2 overflow-x-auto pb-1">
-      <button
-        v-for="mode in ['all', 'today', 'upcoming', 'overdue', 'completed']"
-        :key="mode"
-        type="button"
-        class="shrink-0 uppercase rounded-full px-3 py-1 text-sm font-medium"
-        :class="filter === mode ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-300'"
-        @click="filter = mode as FilterMode"
-      >
-        {{ mode }}
-      </button>
+    <div class="relative mt-4">
+      <div class="pointer-events-none absolute inset-y-0 left-0 z-10 w-5 bg-gradient-to-r from-slate-50 to-transparent" />
+      <div class="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-gradient-to-l from-slate-50 to-transparent" />
+      <div class="flex items-center gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          v-for="mode in ['all', 'today', 'upcoming', 'overdue', 'completed']"
+          :key="mode"
+          type="button"
+          class="min-h-8 shrink-0 uppercase rounded-full px-3 py-1 text-xs font-medium"
+          :class="filter === mode ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-300'"
+          @click="filter = mode as FilterMode"
+        >
+          {{ mode }}
+        </button>
+      </div>
     </div>
 
     <ul v-if="filteredTodos.length" class="mt-3 space-y-3">
@@ -425,24 +454,19 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       No tasks in this filter yet.
     </p>
 
-    <div
-      v-if="selectedTodo"
-      class="fixed inset-0 z-50 overflow-y-auto bg-slate-100 p-4 md:p-8"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div class="mx-auto w-full max-w-3xl rounded-2xl bg-white p-4 shadow-xl ring-1 ring-slate-200 md:p-6">
-        <div class="flex items-center justify-between gap-3">
+    <div v-if="selectedTodo" class="fixed inset-0 z-50 bg-slate-100/95 md:p-8" role="dialog" aria-modal="true">
+      <div class="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col bg-white shadow-xl ring-1 ring-slate-200 md:h-[calc(100dvh-4rem)] md:rounded-2xl">
+        <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white p-3 sm:p-4">
           <button
             type="button"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
             @click="closeDetails"
           >
-            <span aria-hidden="true">←</span>
+            <span aria-hidden="true">&larr;</span>
             Back
           </button>
-          <div class="flex items-center gap-2">
-            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <label class="inline-flex items-center gap-2 text-xs text-slate-700 sm:text-sm">
               <input
                 type="checkbox"
                 class="h-4 w-4 rounded border-slate-300 accent-blue-600"
@@ -453,7 +477,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
             </label>
             <button
               type="button"
-              class="inline-flex h-9 items-center justify-center rounded-lg border border-rose-300 px-3 text-sm font-medium text-rose-700 hover:bg-rose-50"
+              class="inline-flex h-8 items-center justify-center rounded-lg border border-rose-300 px-2.5 text-xs font-medium text-rose-700 hover:bg-rose-50 sm:h-9 sm:px-3 sm:text-sm"
               @click="deleteSelectedTodo"
             >
               Delete
@@ -461,11 +485,12 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
           </div>
         </div>
 
-        <div class="mt-4 space-y-3">
+        <div class="flex-1 overflow-y-auto p-3 sm:p-4">
+          <div class="space-y-3">
           <input
             v-model="detailTitle"
             type="text"
-            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xl font-semibold text-slate-900 outline-none ring-blue-300 focus:ring-2"
+            class="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-lg font-semibold text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-xl"
             placeholder="Task title"
             @input="saveDetails"
           />
@@ -483,7 +508,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
               type="text"
               :list="detailClientTagsListId"
               placeholder="Client tag"
-              class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+              class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
               aria-label="Client tag"
               @change="saveDetails"
             />
@@ -503,31 +528,21 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
           <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
             Created {{ detailCreatedLabel }}
           </div>
-        </div>
-
-        <div class="mt-5">
-          <div class="mb-2 flex items-center justify-between gap-3">
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-700">Full Content</h3>
-            <button
-              type="button"
-              class="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
-              title="Bold (Ctrl/Cmd+B)"
-              @click="wrapContentSelectionBold"
-            >
-              Bold
-            </button>
-          </div>
+          <div class="mt-5">
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-700">Full Content</h3>
+            </div>
           <textarea
             ref="detailContentInput"
             v-model="detailContent"
-            rows="10"
+            rows="12"
             class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
             placeholder="Write notes. Start a line with - or * for bullets. Use **bold** or Ctrl/Cmd+B."
             @input="onContentInput"
             @keydown="onContentKeydown"
           />
 
-          <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div v-if="showContentPreview" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <p class="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Formatted Preview</p>
             <div v-if="contentPreview.length" class="space-y-1 text-sm text-slate-800">
               <div
@@ -536,7 +551,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
                 class="flex items-start gap-2"
                 :class="{ 'pl-0': !line.isBullet }"
               >
-                <span v-if="line.isBullet" class="mt-[1px] text-slate-500">•</span>
+                <span v-if="line.isBullet" class="mt-[1px] text-slate-500">&bull;</span>
                 <span>
                   <template v-for="(segment, segmentIndex) in line.segments" :key="`${index}-${segmentIndex}`">
                     <strong v-if="segment.bold">{{ segment.text }}</strong>
@@ -547,6 +562,36 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
             </div>
             <p v-else class="text-sm text-slate-400">No content yet.</p>
           </div>
+          </div>
+        </div>
+        </div>
+
+        <div class="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t border-slate-200 bg-white p-3 sm:p-4">
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              title="Bold (Ctrl/Cmd+B)"
+              @click="wrapContentSelectionBold"
+            >
+              Bold
+            </button>
+            <button
+              type="button"
+              class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              title="Insert bullet"
+              @click="insertBulletAtCaret"
+            >
+              Bullet
+            </button>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            @click="showContentPreview = !showContentPreview"
+          >
+            {{ showContentPreview ? 'Hide Preview' : 'Show Preview' }}
+          </button>
         </div>
       </div>
     </div>
