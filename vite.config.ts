@@ -7,7 +7,13 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['pwa-icon.svg', 'pwa-icon-maskable.svg'],
+      includeAssets: [
+        'AppIcons/android/mipmap-xxxhdpi/ic_launcher.png',
+        'AppIcons/playstore.png',
+        'AppIcons/Assets.xcassets/AppIcon.appiconset/_/180.png',
+        'AppIcons/Assets.xcassets/AppIcon.appiconset/_/32.png',
+        'AppIcons/Assets.xcassets/AppIcon.appiconset/_/16.png'
+      ],
       manifest: {
         name: 'Social Media Stage Todos',
         short_name: 'SM Todos',
@@ -19,15 +25,14 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            src: '/pwa-icon.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml'
+            src: '/AppIcons/android/mipmap-xxxhdpi/ic_launcher.png',
+            sizes: '192x192',
+            type: 'image/png'
           },
           {
-            src: '/pwa-icon-maskable.svg',
+            src: '/AppIcons/playstore.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'maskable'
+            type: 'image/png'
           }
         ]
       },
