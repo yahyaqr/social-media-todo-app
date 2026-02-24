@@ -41,8 +41,8 @@ const clientTag = ref('');
 const link = ref('');
 const filter = ref<FilterMode>('all');
 const draggingTodoId = ref<string | null>(null);
-const clientTagsListId = computed(() => `saved-client-tags-${props.stageId}`);
 const detailClientTagsListId = computed(() => `detail-client-tags-${props.stageId}`);
+const showClientTagSuggestions = ref(false);
 const selectedTodoId = ref<string | null>(null);
 const detailTitle = ref('');
 const detailDueDate = ref('');
@@ -96,6 +96,19 @@ const filteredTodos = computed(() => {
   return list.filter((todo) => !todo.done);
 });
 
+const filteredClientTags = computed(() => {
+  const query = clientTag.value.trim().toLowerCase();
+  const tags = store.clientTags;
+
+  if (!query) {
+    return tags.slice(0, 8);
+  }
+
+  return tags
+    .filter((tag) => tag.toLowerCase().includes(query))
+    .slice(0, 8);
+});
+
 const parseDueAt = (): number | undefined => {
   if (!dueDate.value) {
     return undefined;
@@ -120,6 +133,26 @@ const submitTodo = () => {
   dueDate.value = getNextStageDate(props.stageId);
   clientTag.value = '';
   link.value = '';
+  showClientTagSuggestions.value = false;
+};
+
+const onClientTagFocus = (): void => {
+  showClientTagSuggestions.value = true;
+};
+
+const onClientTagBlur = (): void => {
+  window.setTimeout(() => {
+    showClientTagSuggestions.value = false;
+  }, 120);
+};
+
+const onClientTagInput = (): void => {
+  showClientTagSuggestions.value = true;
+};
+
+const selectClientTag = (tag: string): void => {
+  clientTag.value = tag;
+  showClientTagSuggestions.value = false;
 };
 
 const openDetails = (todoId: string): void => {
@@ -138,6 +171,16 @@ const openDetails = (todoId: string): void => {
 
 const closeDetails = (): void => {
   selectedTodoId.value = null;
+};
+
+const deleteSelectedTodo = (): void => {
+  const todo = selectedTodo.value;
+  if (!todo) {
+    return;
+  }
+
+  store.deleteTodo(props.stageId, todo.id);
+  closeDetails();
 };
 
 const normalizeBulletLines = (value: string): string => {
@@ -313,17 +356,32 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         />
       </div>
       <div class="flex items-center gap-2">
-        <input
-          v-model="clientTag"
-          type="text"
-          :list="clientTagsListId"
-          placeholder="Client tag (optional)"
-          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
-          aria-label="Client tag"
-        />
-        <datalist :id="clientTagsListId">
-          <option v-for="tag in store.clientTags" :key="tag" :value="tag" />
-        </datalist>
+        <div class="relative w-full">
+          <input
+            v-model="clientTag"
+            type="text"
+            placeholder="Client tag (optional)"
+            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+            aria-label="Client tag"
+            @focus="onClientTagFocus"
+            @blur="onClientTagBlur"
+            @input="onClientTagInput"
+          />
+          <div
+            v-if="showClientTagSuggestions && filteredClientTags.length"
+            class="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+          >
+            <button
+              v-for="tag in filteredClientTags"
+              :key="tag"
+              type="button"
+              class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+              @mousedown.prevent="selectClientTag(tag)"
+            >
+              {{ tag }}
+            </button>
+          </div>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <input
@@ -336,12 +394,12 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       </div>
     </form>
 
-    <div class="mt-4 flex flex-wrap items-center gap-2">
+    <div class="mt-4 flex items-center gap-2 overflow-x-auto pb-1">
       <button
         v-for="mode in ['all', 'today', 'upcoming', 'overdue', 'completed']"
         :key="mode"
         type="button"
-        class="uppercase rounded-full px-3 py-1 text-sm font-medium"
+        class="shrink-0 uppercase rounded-full px-3 py-1 text-sm font-medium"
         :class="filter === mode ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-300'"
         @click="filter = mode as FilterMode"
       >
@@ -357,8 +415,6 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         :todo="todo"
         :dragging="isDragging(todo)"
         @toggle="store.toggleTodo"
-        @update-todo="store.updateTodo"
-        @remove="store.deleteTodo"
         @drag-start="onDragStart"
         @drag-drop="onDragDrop"
         @open-details="openDetails"
@@ -385,15 +441,24 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
             <span aria-hidden="true">←</span>
             Back
           </button>
-          <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              class="h-4 w-4 rounded border-slate-300 accent-blue-600"
-              :checked="selectedTodo.done"
-              @change="toggleDetailsDone(($event.target as HTMLInputElement).checked)"
-            />
-            Completed
-          </label>
+          <div class="flex items-center gap-2">
+            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-slate-300 accent-blue-600"
+                :checked="selectedTodo.done"
+                @change="toggleDetailsDone(($event.target as HTMLInputElement).checked)"
+              />
+              Completed
+            </label>
+            <button
+              type="button"
+              class="inline-flex h-9 items-center justify-center rounded-lg border border-rose-300 px-3 text-sm font-medium text-rose-700 hover:bg-rose-50"
+              @click="deleteSelectedTodo"
+            >
+              Delete
+            </button>
+          </div>
         </div>
 
         <div class="mt-4 space-y-3">
