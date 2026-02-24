@@ -1,0 +1,27 @@
+{
+  "name": "social-media-todo-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pinia": "^2.1.7",
+    "swiper": "^11.1.5",
+    "vue": "^3.4.38"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@vitejs/plugin-vue": "^5.1.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.5.3",
+    "vite": "^5.4.1",
+    "vue-tsc": "^2.1.6",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}
