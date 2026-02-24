@@ -252,45 +252,6 @@ const createdLabel = computed(() => {
             </span>
             Completed
           </button>
-
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 enabled:hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label="Undo to previous stage"
-            title="Undo"
-            :disabled="!canUndo"
-            @click="emit('undo')"
-          >
-            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 7L5 12l5 5" />
-              <path d="M5 12h9a5 5 0 010 10h-3" />
-            </svg>
-          </button>
-
-          <button
-            type="button"
-            class="inline-flex h-9 items-center justify-center rounded-lg border border-blue-300 px-3 text-xs font-medium text-blue-700 enabled:hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
-            :disabled="!canAdvance"
-            @click="emit('advance')"
-          >
-            Advance →
-          </button>
-
-          <button
-            type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50"
-            aria-label="Delete task"
-            title="Delete"
-            @click="emit('delete')"
-          >
-            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18" />
-              <path d="M8 6V4h8v2" />
-              <path d="M19 6l-1 14H6L5 6" />
-              <path d="M10 11v6" />
-              <path d="M14 11v6" />
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -420,6 +381,49 @@ const createdLabel = computed(() => {
                 </div>
               </div>
               <p v-else class="text-sm text-slate-400">No content yet.</p>
+            </div>
+
+            <div class="mt-3 flex justify-between gap-2">
+              <button
+                type="button"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50"
+                aria-label="Delete task"
+                title="Delete"
+                @click="emit('delete')"
+              >
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
+              </button>
+
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 enabled:hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Undo to previous stage"
+                  title="Undo"
+                  :disabled="!canUndo"
+                  @click="emit('undo')"
+                >
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 7L5 12l5 5" />
+                    <path d="M5 12h9a5 5 0 010 10h-3" />
+                  </svg>
+                </button>
+  
+                <button
+                  type="button"
+                  class="inline-flex h-9 items-center justify-center rounded-lg border border-emerald-300 px-3 text-xs font-medium text-emerald-700 enabled:hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+                  :disabled="!canAdvance"
+                  @click="emit('advance')"
+                >
+                  Advance →
+                </button>
+              </div>
             </div>
           </div>
         </div>
