@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useTodosStore } from '../stores/todos';
-import type { StageId, Todo } from '../data/stages';
+import { stages, type StageId, type Todo } from '../data/stages';
 import AddTaskSheet from './AddTaskSheet.vue';
 import BasicDropdown from './BasicDropdown.vue';
 import TaskDetailSheet from './TaskDetailSheet.vue';
@@ -53,6 +53,9 @@ const selectedTodoId = ref<string | null>(null);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
 const selectedTodo = computed(() => todos.value.find((todo) => todo.id === selectedTodoId.value) ?? null);
+const currentStageIndex = computed(() => stages.findIndex((stage) => stage.id === props.stageId));
+const canUndo = computed(() => currentStageIndex.value > 0);
+const canAdvance = computed(() => currentStageIndex.value >= 0 && currentStageIndex.value < stages.length - 1);
 
 const dayBoundaries = () => {
   const now = new Date();
@@ -153,6 +156,24 @@ const updateDetails = (updates: {
   store.updateTodo(props.stageId, todo.id, updates);
 };
 
+const moveSelectedTodo = (direction: -1 | 1): void => {
+  const todo = selectedTodo.value;
+  if (!todo) {
+    return;
+  }
+
+  const nextIndex = currentStageIndex.value + direction;
+  if (nextIndex < 0 || nextIndex >= stages.length) {
+    return;
+  }
+
+  const targetStageId = stages[nextIndex].id;
+  const moved = store.moveTodoToStage(props.stageId, todo.id, targetStageId);
+  if (moved) {
+    closeDetails();
+  }
+};
+
 const onDragStart = (todoId: string) => {
   draggingTodoId.value = todoId;
 };
@@ -215,10 +236,15 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <TaskDetailSheet
       :visible="Boolean(selectedTodo)"
       :todo="selectedTodo"
+      :stage-id="stageId"
       :client-tags="store.clientTags"
+      :can-undo="canUndo"
+      :can-advance="canAdvance"
       @close="closeDetails"
       @delete="deleteSelectedTodo"
       @update="updateDetails"
+      @undo="moveSelectedTodo(-1)"
+      @advance="moveSelectedTodo(1)"
     />
   </section>
 </template>

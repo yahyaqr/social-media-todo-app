@@ -217,6 +217,23 @@ export const useTodosStore = defineStore('todos', () => {
     todosByStage.value[stageId] = list;
   };
 
+  const moveTodoToStage = (fromStageId: StageId, todoId: string, toStageId: StageId): boolean => {
+    if (fromStageId === toStageId) {
+      return false;
+    }
+
+    const source = [...todosByStage.value[fromStageId]];
+    const index = source.findIndex((item) => item.id === todoId);
+    if (index < 0) {
+      return false;
+    }
+
+    const [moved] = source.splice(index, 1);
+    todosByStage.value[fromStageId] = source;
+    todosByStage.value[toStageId] = [moved, ...todosByStage.value[toStageId]];
+    return true;
+  };
+
   const ensureStageShape = (): void => {
     for (const stage of stages) {
       if (!Array.isArray(todosByStage.value[stage.id])) {
@@ -236,6 +253,7 @@ export const useTodosStore = defineStore('todos', () => {
     updateTodo,
     deleteTodo,
     clearCompleted,
-    reorderTodo
+    reorderTodo,
+    moveTodoToStage
   };
 });

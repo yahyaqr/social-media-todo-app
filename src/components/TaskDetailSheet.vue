@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import type { Todo } from '../data/stages';
+import type { StageId, Todo } from '../data/stages';
 
 type TaskUpdates = {
   text?: string;
@@ -24,13 +24,18 @@ type ContentLine = {
 const props = defineProps<{
   visible: boolean;
   todo: Todo | null;
+  stageId: StageId;
   clientTags: string[];
+  canUndo: boolean;
+  canAdvance: boolean;
 }>();
 
 const emit = defineEmits<{
   close: [];
   delete: [];
   update: [updates: TaskUpdates];
+  undo: [];
+  advance: [];
 }>();
 
 const detailTitle = ref('');
@@ -223,16 +228,53 @@ const createdLabel = computed(() => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
+
         <div class="flex items-center gap-1.5 sm:gap-2">
-          <label class="inline-flex items-center gap-2 text-xs text-slate-700 sm:text-sm">
-            <input
-              type="checkbox"
-              class="h-4 w-4 rounded border-slate-300 accent-blue-600"
-              :checked="todo.done"
-              @change="toggleDone(($event.target as HTMLInputElement).checked)"
-            />
+          <button
+            type="button"
+            class="inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs font-semibold transition sm:text-sm"
+            :class="
+              todo.done
+                ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200'
+                : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
+            "
+            :aria-pressed="todo.done"
+            title="Toggle completed"
+            @click="toggleDone(!todo.done)"
+          >
+            <span
+              class="inline-flex h-4 w-4 items-center justify-center rounded-full border transition"
+              :class="todo.done ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-400 bg-white text-transparent'"
+            >
+              <svg viewBox="0 0 24 24" class="h-3 w-3 transition" :class="todo.done ? 'scale-100' : 'scale-75'" fill="none" stroke="currentColor" stroke-width="3">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </span>
             Completed
-          </label>
+          </button>
+
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 enabled:hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Undo to previous stage"
+            title="Undo"
+            :disabled="!canUndo"
+            @click="emit('undo')"
+          >
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M4 7H15C16.8692 7 17.8039 7 18.5 7.40193C18.9561 7.66523 19.3348 8.04394 19.5981 8.49999C20 9.19615 20 10.1308 20 12C20 13.8692 20 14.8038 19.5981 15.5C19.3348 15.9561 18.9561 16.3348 18.5 16.5981C17.8039 17 16.8692 17 15 17H8.00001M4 7L7 4M4 7L7 10" stroke="#1C274C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g>
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            class="inline-flex h-9 items-center justify-center rounded-lg border border-blue-300 px-3 text-xs font-medium text-blue-700 enabled:hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+            :disabled="!canAdvance"
+            @click="emit('advance')"
+          >
+            Advance →
+          </button>
+
           <button
             type="button"
             class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50"
