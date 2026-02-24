@@ -269,7 +269,7 @@ const createdLabel = computed(() => {
             <input
               v-model="detailDueDate"
               type="date"
-              class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+              class="date-input min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 focus:ring-2"
               aria-label="Due date"
               @change="saveDetails"
             />

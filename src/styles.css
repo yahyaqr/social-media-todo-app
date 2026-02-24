@@ -18,6 +18,27 @@ body {
   background-color: rgb(241 245 249);
 }
 
+/* iOS Safari zoom fix: focused controls below 16px trigger page zoom. */
+input,
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+/* Keep date input metrics predictable across browsers. */
+input[type='date'] {
+  line-height: 1.2;
+}
+
+/* Normalize native date control so explicit height/padding are respected. */
+input[type='date'].date-input {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+  height: 48px;
+  padding-block: 10px;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
