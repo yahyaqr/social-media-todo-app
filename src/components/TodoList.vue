@@ -12,7 +12,31 @@ const props = defineProps<{
 
 const store = useTodosStore();
 const newTodoText = ref('');
-const dueDate = ref('');
+const stageWeekday: Record<StageId, number> = {
+  ideation: 1,
+  research: 2,
+  draft: 3,
+  produce: 4,
+  publish: 5
+};
+
+const formatDateInput = (timestamp: number): string => {
+  const value = new Date(timestamp);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getNextStageDate = (stageId: StageId): string => {
+  const now = new Date();
+  const targetWeekday = stageWeekday[stageId];
+  const dayOffset = (targetWeekday - now.getDay() + 7) % 7;
+  const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+  return formatDateInput(targetDate.getTime());
+};
+
+const dueDate = ref(getNextStageDate(props.stageId));
 const clientTag = ref('');
 const link = ref('');
 const filter = ref<FilterMode>('all');
@@ -73,7 +97,7 @@ const parseDueAt = (): number | undefined => {
 const submitTodo = () => {
   store.addTodo(props.stageId, newTodoText.value, parseDueAt(), clientTag.value, link.value);
   newTodoText.value = '';
-  dueDate.value = '';
+  dueDate.value = getNextStageDate(props.stageId);
   clientTag.value = '';
   link.value = '';
 };

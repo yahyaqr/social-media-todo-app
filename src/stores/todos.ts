@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { seedTodosByStage, stages, type StageId, type Todo } from '../data/stages';
+import { seedTodosByStage, stages, type StageId } from '../data/stages';
 import { loadState, type PersistedState, type TodosByStage } from '../utils/storage';
 
 const createId = (): string => {

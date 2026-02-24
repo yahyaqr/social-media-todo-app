@@ -123,12 +123,32 @@ const isOverdue = computed(() => {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   return props.todo.dueAt < todayStart;
 });
+
+const timingClass = computed(() => {
+  if (!props.todo.dueAt || props.todo.done) {
+    return 'border-slate-200 bg-white';
+  }
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+
+  if (props.todo.dueAt < todayStart) {
+    return 'border-rose-200 bg-rose-50';
+  }
+
+  if (props.todo.dueAt < tomorrowStart) {
+    return 'border-amber-200 bg-amber-50';
+  }
+
+  return 'border-sky-200 bg-sky-50';
+});
 </script>
 
 <template>
   <li
-    class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-    :class="{ 'opacity-50': dragging }"
+    class="flex items-start gap-3 rounded-xl border p-4 shadow-sm"
+    :class="[timingClass, { 'opacity-50': dragging }]"
     :draggable="!isEditing"
     @dragstart="onDragStart"
     @dragover.prevent

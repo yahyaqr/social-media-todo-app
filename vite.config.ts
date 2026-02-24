@@ -15,8 +15,8 @@ export default defineConfig({
         'AppIcons/Assets.xcassets/AppIcon.appiconset/_/16.png'
       ],
       manifest: {
-        name: 'Social Media Stage Todos',
-        short_name: 'SM Todos',
+        name: 'Stages',
+        short_name: 'Stages',
         description: 'Swipeable 5-stage todo manager for social media content production.',
         theme_color: '#f1f5f9',
         background_color: '#f1f5f9',
