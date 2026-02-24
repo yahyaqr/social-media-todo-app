@@ -25,28 +25,6 @@ textarea {
   font-size: 16px !important;
 }
 
-/* Keep date input metrics predictable across browsers. */
-input[type='date'] {
-  line-height: 1.2;
-}
-
 * {
   -webkit-tap-highlight-color: transparent;
-}
-
-.swiper-pagination {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  padding: 8px 0;
-  background: linear-gradient(to bottom, rgba(241, 245, 249, 0.95), rgba(241, 245, 249, 0));
-}
-
-.swiper-pagination-bullet {
-  width: 8px;
-  height: 8px;
-}
-
-.swiper-pagination-bullet-active {
-  background: rgb(37 99 235);
 }
