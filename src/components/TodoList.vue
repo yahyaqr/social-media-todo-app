@@ -70,10 +70,6 @@ const submitTodo = () => {
   dueDate.value = '';
 };
 
-const applyTemplate = () => {
-  store.addTemplateTodos(props.stageId);
-};
-
 const onDragStart = (todoId: string) => {
   draggingTodoId.value = todoId;
 };
@@ -119,22 +115,6 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
           class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 focus:ring-2"
           aria-label="Due date"
         />
-        <button
-          type="button"
-          class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700"
-          aria-label="Add template todos"
-          title="Add template todos"
-          @click="applyTemplate"
-        >
-          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M8 6h13" />
-            <path d="M8 12h13" />
-            <path d="M8 18h13" />
-            <path d="M3 6h.01" />
-            <path d="M3 12h.01" />
-            <path d="M3 18h.01" />
-          </svg>
-        </button>
       </div>
     </form>
 

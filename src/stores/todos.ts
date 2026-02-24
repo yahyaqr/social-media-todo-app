@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { seedTodosByStage, stageTemplates, stages, type StageId, type Todo } from '../data/stages';
+import { seedTodosByStage, stages, type StageId, type Todo } from '../data/stages';
 import { loadState, type PersistedState, type TodosByStage } from '../utils/storage';
 
 const createId = (): string => {
@@ -43,20 +43,6 @@ export const useTodosStore = defineStore('todos', () => {
       createdAt: Date.now(),
       dueAt
     });
-  };
-
-  const addTemplateTodos = (stageId: StageId): void => {
-    const now = Date.now();
-    const template = stageTemplates[stageId];
-
-    const additions = template.map((text, index) => ({
-      id: createId(),
-      text,
-      done: false,
-      createdAt: now + index
-    }));
-
-    todosByStage.value[stageId] = [...additions, ...todosByStage.value[stageId]];
   };
 
   const toggleTodo = (stageId: StageId, todoId: string): void => {
@@ -137,7 +123,6 @@ export const useTodosStore = defineStore('todos', () => {
     todosByStage,
     stageProgress,
     addTodo,
-    addTemplateTodos,
     toggleTodo,
     updateTodo,
     deleteTodo,

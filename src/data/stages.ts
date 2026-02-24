@@ -79,10 +79,3 @@ export const seedTodosByStage: Record<StageId, Todo[]> = {
   ]
 };
 
-export const stageTemplates: Record<StageId, string[]> = {
-  ideation: ['Review top-performing past post', 'Draft 5 new hooks', 'Pick one core message'],
-  research: ['Collect three competitor examples', 'Draft structure bullets', 'Validate CTA alignment'],
-  draft: ['Write intro with strong first line', 'Draft main points', 'Add CTA and closing line'],
-  produce: ['Prepare visuals/recording setup', 'Create final asset set', 'Run mobile QA pass'],
-  publish: ['Schedule at best time slot', 'Monitor first-hour engagement', 'Log learnings for next cycle']
-};
