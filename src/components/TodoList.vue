@@ -2,6 +2,7 @@
 import { computed, nextTick, ref } from 'vue';
 import { useTodosStore } from '../stores/todos';
 import type { StageId, Todo } from '../data/stages';
+import AddTaskSheet from './AddTaskSheet.vue';
 import TodoItem from './TodoItem.vue';
 
 type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -11,7 +12,6 @@ const props = defineProps<{
 }>();
 
 const store = useTodosStore();
-const newTodoText = ref('');
 const stageWeekday: Record<StageId, number> = {
   ideation: 1,
   research: 2,
@@ -36,13 +36,10 @@ const getNextStageDate = (stageId: StageId): string => {
   return formatDateInput(targetDate.getTime());
 };
 
-const dueDate = ref(getNextStageDate(props.stageId));
-const clientTag = ref('');
-const link = ref('');
 const filter = ref<FilterMode>('all');
 const draggingTodoId = ref<string | null>(null);
 const detailClientTagsListId = computed(() => `detail-client-tags-${props.stageId}`);
-const showClientTagSuggestions = ref(false);
+const isAddTaskSheetOpen = ref(false);
 const selectedTodoId = ref<string | null>(null);
 const detailTitle = ref('');
 const detailDueDate = ref('');
@@ -97,28 +94,6 @@ const filteredTodos = computed(() => {
   return list.filter((todo) => !todo.done);
 });
 
-const filteredClientTags = computed(() => {
-  const query = clientTag.value.trim().toLowerCase();
-  const tags = store.clientTags;
-
-  if (!query) {
-    return tags.slice(0, 8);
-  }
-
-  return tags
-    .filter((tag) => tag.toLowerCase().includes(query))
-    .slice(0, 8);
-});
-
-const parseDueAt = (): number | undefined => {
-  if (!dueDate.value) {
-    return undefined;
-  }
-
-  const parsed = new Date(`${dueDate.value}T00:00:00`).getTime();
-  return Number.isNaN(parsed) ? undefined : parsed;
-};
-
 const parseDate = (value: string): number | undefined => {
   if (!value) {
     return undefined;
@@ -128,32 +103,16 @@ const parseDate = (value: string): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const submitTodo = () => {
-  store.addTodo(props.stageId, newTodoText.value, parseDueAt(), clientTag.value, link.value);
-  newTodoText.value = '';
-  dueDate.value = getNextStageDate(props.stageId);
-  clientTag.value = '';
-  link.value = '';
-  showClientTagSuggestions.value = false;
+const openAddTaskSheet = (): void => {
+  isAddTaskSheetOpen.value = true;
 };
 
-const onClientTagFocus = (): void => {
-  showClientTagSuggestions.value = true;
+const closeAddTaskSheet = (): void => {
+  isAddTaskSheetOpen.value = false;
 };
 
-const onClientTagBlur = (): void => {
-  window.setTimeout(() => {
-    showClientTagSuggestions.value = false;
-  }, 120);
-};
-
-const onClientTagInput = (): void => {
-  showClientTagSuggestions.value = true;
-};
-
-const selectClientTag = (tag: string): void => {
-  clientTag.value = tag;
-  showClientTagSuggestions.value = false;
+const submitFromSheet = (payload: { text: string; dueDate: string; clientTag: string; link: string }): void => {
+  store.addTodo(props.stageId, payload.text, parseDate(payload.dueDate), payload.clientTag, payload.link);
 };
 
 const openDetails = (todoId: string): void => {
@@ -162,6 +121,7 @@ const openDetails = (todoId: string): void => {
     return;
   }
 
+  isAddTaskSheetOpen.value = false;
   selectedTodoId.value = todo.id;
   detailTitle.value = todo.text;
   detailDueDate.value = todo.dueAt ? formatDateInput(todo.dueAt) : '';
@@ -352,72 +312,13 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
 
 <template>
   <section class="rounded-2xl bg-slate-50 p-3 shadow-sm ring-1 ring-slate-200 sm:p-4">
-    <form class="space-y-2.5" @submit.prevent="submitTodo">
-      <div class="flex gap-2">
-        <input
-          v-model="newTodoText"
-          type="text"
-          placeholder="Add a task..."
-          class="min-h-12 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
-        />
-        <button
-          type="submit"
-          class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition active:scale-[0.98]"
-          aria-label="Add todo"
-          title="Add todo"
-        >
-          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </button>
-      </div>
-      <div class="flex items-center gap-2">
-        <input
-          v-model="dueDate"
-          type="date"
-          class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
-          aria-label="Due date"
-        />
-      </div>
-      <div class="flex items-center gap-2">
-        <div class="relative w-full">
-          <input
-            v-model="clientTag"
-            type="text"
-            placeholder="Client tag (optional)"
-            class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
-            aria-label="Client tag"
-            @focus="onClientTagFocus"
-            @blur="onClientTagBlur"
-            @input="onClientTagInput"
-          />
-          <div
-            v-if="showClientTagSuggestions && filteredClientTags.length"
-            class="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
-          >
-            <button
-              v-for="tag in filteredClientTags"
-              :key="tag"
-              type="button"
-              class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-              @mousedown.prevent="selectClientTag(tag)"
-            >
-              {{ tag }}
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <input
-          v-model="link"
-          type="url"
-          placeholder="Link (optional)"
-          class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
-          aria-label="Link"
-        />
-      </div>
-    </form>
+    <AddTaskSheet
+      :visible="isAddTaskSheetOpen"
+      :initial-due-date="getNextStageDate(stageId)"
+      :client-tags="store.clientTags"
+      @close="closeAddTaskSheet"
+      @submit="submitFromSheet"
+    />
 
     <div class="relative mt-4">
       <div class="pointer-events-none absolute inset-y-0 left-0 z-10 w-5 bg-gradient-to-r from-slate-50 to-transparent" />
@@ -453,6 +354,15 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <p v-else class="mt-4 rounded-xl bg-white p-4 text-center text-sm text-slate-500">
       No tasks in this filter yet.
     </p>
+
+    <button
+      v-if="!selectedTodo && !isAddTaskSheetOpen"
+      type="button"
+      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-12 items-center justify-center rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98] sm:right-6"
+      @click="openAddTaskSheet"
+    >
+      Add Task +
+    </button>
 
     <div v-if="selectedTodo" class="fixed inset-0 z-50 bg-slate-100/95 md:p-8" role="dialog" aria-modal="true">
       <div class="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col bg-white shadow-xl ring-1 ring-slate-200 md:h-[calc(100dvh-4rem)] md:rounded-2xl">
