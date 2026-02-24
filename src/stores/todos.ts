@@ -11,18 +11,80 @@ const createId = (): string => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const createInitialTodos = (): TodosByStage => {
-  const loaded = loadState();
-
-  if (loaded?.todosByStage) {
-    return loaded.todosByStage;
+const normalizeLink = (value?: string): string | undefined => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
   }
 
-  return structuredClone(seedTodosByStage);
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+};
+
+const normalizeClientTag = (value?: string): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+};
+
+const buildClientTagCatalog = (todosByStage: TodosByStage, existing: string[] = []): string[] => {
+  const tags = new Set(existing.map((tag) => tag.trim()).filter(Boolean));
+
+  for (const stage of stages) {
+    const list = Array.isArray(todosByStage[stage.id]) ? todosByStage[stage.id] : [];
+    for (const todo of list) {
+      const tag = normalizeClientTag(todo.clientTag);
+      if (tag) {
+        tags.add(tag);
+      }
+    }
+  }
+
+  return [...tags].sort((a, b) => a.localeCompare(b));
+};
+
+const createInitialState = (): PersistedState => {
+  const loaded = loadState();
+  const todosByStage = loaded?.todosByStage ?? structuredClone(seedTodosByStage);
+  const clientTags = buildClientTagCatalog(todosByStage, loaded?.clientTags ?? []);
+
+  return { todosByStage, clientTags };
 };
 
 export const useTodosStore = defineStore('todos', () => {
-  const todosByStage = ref<TodosByStage>(createInitialTodos());
+  const initialState = createInitialState();
+  const todosByStage = ref<TodosByStage>(initialState.todosByStage);
+  const rememberedClientTags = ref<string[]>(initialState.clientTags ?? []);
+
+  const rememberClientTag = (value?: string): void => {
+    const normalized = normalizeClientTag(value);
+    if (!normalized) {
+      return;
+    }
+
+    if (!rememberedClientTags.value.includes(normalized)) {
+      rememberedClientTags.value = [...rememberedClientTags.value, normalized].sort((a, b) =>
+        a.localeCompare(b)
+      );
+    }
+  };
+
+  const clientTags = computed(() => {
+    const tags = new Set(rememberedClientTags.value);
+
+    for (const stage of stages) {
+      for (const todo of todosByStage.value[stage.id]) {
+        const tag = normalizeClientTag(todo.clientTag);
+        if (tag) {
+          tags.add(tag);
+        }
+      }
+    }
+
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  });
 
   const stageProgress = computed(() => (stageId: StageId): string => {
     const list = todosByStage.value[stageId] ?? [];
@@ -30,18 +92,31 @@ export const useTodosStore = defineStore('todos', () => {
     return `${doneCount}/${list.length} done`;
   });
 
-  const addTodo = (stageId: StageId, text: string, dueAt?: number): void => {
+  const addTodo = (
+    stageId: StageId,
+    text: string,
+    dueAt?: number,
+    clientTag?: string,
+    link?: string
+  ): void => {
     const trimmed = text.trim();
     if (!trimmed) {
       return;
     }
+
+    const normalizedClientTag = normalizeClientTag(clientTag);
+    const normalizedLink = normalizeLink(link);
+
+    rememberClientTag(normalizedClientTag);
 
     todosByStage.value[stageId].unshift({
       id: createId(),
       text: trimmed,
       done: false,
       createdAt: Date.now(),
-      dueAt
+      dueAt,
+      clientTag: normalizedClientTag,
+      link: normalizedLink
     });
   };
 
@@ -59,6 +134,8 @@ export const useTodosStore = defineStore('todos', () => {
       text?: string;
       dueAt?: number;
       done?: boolean;
+      clientTag?: string;
+      link?: string;
     }
   ): void => {
     const todo = todosByStage.value[stageId].find((item) => item.id === todoId);
@@ -76,6 +153,15 @@ export const useTodosStore = defineStore('todos', () => {
 
     if (Object.prototype.hasOwnProperty.call(updates, 'dueAt')) {
       todo.dueAt = updates.dueAt;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'clientTag')) {
+      todo.clientTag = normalizeClientTag(updates.clientTag);
+      rememberClientTag(todo.clientTag);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'link')) {
+      todo.link = normalizeLink(updates.link);
     }
 
     if (updates.done !== undefined) {
@@ -121,6 +207,7 @@ export const useTodosStore = defineStore('todos', () => {
 
   return {
     todosByStage,
+    clientTags,
     stageProgress,
     addTodo,
     toggleTodo,

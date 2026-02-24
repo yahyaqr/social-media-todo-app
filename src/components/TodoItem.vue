@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { StageId, Todo } from '../data/stages';
+import { useTodosStore } from '../stores/todos';
 
 type TodoUpdates = {
   text?: string;
   dueAt?: number;
   done?: boolean;
+  clientTag?: string;
+  link?: string;
 };
 
 const props = defineProps<{
@@ -13,6 +16,7 @@ const props = defineProps<{
   todo: Todo;
   dragging?: boolean;
 }>();
+const store = useTodosStore();
 
 const emit = defineEmits<{
   toggle: [stageId: StageId, todoId: string];
@@ -25,7 +29,10 @@ const emit = defineEmits<{
 const isEditing = ref(false);
 const draftText = ref('');
 const draftDueDate = ref('');
+const draftClientTag = ref('');
+const draftLink = ref('');
 const editError = ref('');
+const editClientTagsListId = computed(() => `edit-client-tags-${props.todo.id}`);
 
 const formatDateInput = (timestamp?: number): string => {
   if (!timestamp) {
@@ -52,6 +59,8 @@ const startEdit = (): void => {
   isEditing.value = true;
   draftText.value = props.todo.text;
   draftDueDate.value = formatDateInput(props.todo.dueAt);
+  draftClientTag.value = props.todo.clientTag ?? '';
+  draftLink.value = props.todo.link ?? '';
   editError.value = '';
 };
 
@@ -69,7 +78,9 @@ const saveEdit = (): void => {
 
   emit('updateTodo', props.stageId, props.todo.id, {
     text: trimmed,
-    dueAt: parseDueDate()
+    dueAt: parseDueDate(),
+    clientTag: draftClientTag.value,
+    link: draftLink.value
   });
 
   isEditing.value = false;
@@ -148,6 +159,26 @@ const isOverdue = computed(() => {
           @keydown.enter.prevent="saveEdit"
           @keydown.esc.prevent="cancelEdit"
         />
+        <input
+          v-model="draftClientTag"
+          type="text"
+          :list="editClientTagsListId"
+          placeholder="Client tag (optional)"
+          class="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          @keydown.enter.prevent="saveEdit"
+          @keydown.esc.prevent="cancelEdit"
+        />
+        <datalist :id="editClientTagsListId">
+          <option v-for="tag in store.clientTags" :key="tag" :value="tag" />
+        </datalist>
+        <input
+          v-model="draftLink"
+          type="url"
+          placeholder="Link (optional)"
+          class="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          @keydown.enter.prevent="saveEdit"
+          @keydown.esc.prevent="cancelEdit"
+        />
         <p v-if="editError" class="mt-1 text-xs text-rose-600">{{ editError }}</p>
       </template>
 
@@ -162,6 +193,20 @@ const isOverdue = computed(() => {
         <p v-if="dueLabel" class="mt-1 text-xs" :class="isOverdue ? 'text-rose-600' : 'text-slate-500'">
           Due {{ dueLabel }}
         </p>
+        <div v-if="todo.clientTag || todo.link" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span v-if="todo.clientTag" class="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
+            {{ todo.clientTag }}
+          </span>
+          <a
+            v-if="todo.link"
+            :href="todo.link"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="rounded-full bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100"
+          >
+            Open link
+          </a>
+        </div>
       </template>
     </div>
 

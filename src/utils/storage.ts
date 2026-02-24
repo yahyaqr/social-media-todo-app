@@ -6,6 +6,7 @@ export type TodosByStage = Record<StageId, Todo[]>;
 
 export type PersistedState = {
   todosByStage: TodosByStage;
+  clientTags?: string[];
 };
 
 export const loadState = (): PersistedState | null => {

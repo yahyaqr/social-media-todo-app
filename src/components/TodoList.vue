@@ -4,7 +4,7 @@ import { useTodosStore } from '../stores/todos';
 import type { StageId, Todo } from '../data/stages';
 import TodoItem from './TodoItem.vue';
 
-type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue';
+type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
 
 const props = defineProps<{
   stageId: StageId;
@@ -13,11 +13,13 @@ const props = defineProps<{
 const store = useTodosStore();
 const newTodoText = ref('');
 const dueDate = ref('');
+const clientTag = ref('');
+const link = ref('');
 const filter = ref<FilterMode>('all');
 const draggingTodoId = ref<string | null>(null);
+const clientTagsListId = computed(() => `saved-client-tags-${props.stageId}`);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
-const hasCompleted = computed(() => todos.value.some((todo) => todo.done));
 
 const dayBoundaries = () => {
   const now = new Date();
@@ -41,18 +43,22 @@ const filteredTodos = computed(() => {
   });
 
   if (filter.value === 'today') {
-    return list.filter((todo) => todo.dueAt !== undefined && todo.dueAt >= start && todo.dueAt < end);
+    return list.filter((todo) => !todo.done && todo.dueAt !== undefined && todo.dueAt >= start && todo.dueAt < end);
   }
 
   if (filter.value === 'upcoming') {
-    return list.filter((todo) => todo.dueAt !== undefined && todo.dueAt >= end);
+    return list.filter((todo) => !todo.done && todo.dueAt !== undefined && todo.dueAt >= end);
   }
 
   if (filter.value === 'overdue') {
     return list.filter((todo) => todo.dueAt !== undefined && todo.dueAt < start && !todo.done);
   }
 
-  return list;
+  if (filter.value === 'completed') {
+    return list.filter((todo) => todo.done);
+  }
+
+  return list.filter((todo) => !todo.done);
 });
 
 const parseDueAt = (): number | undefined => {
@@ -65,9 +71,11 @@ const parseDueAt = (): number | undefined => {
 };
 
 const submitTodo = () => {
-  store.addTodo(props.stageId, newTodoText.value, parseDueAt());
+  store.addTodo(props.stageId, newTodoText.value, parseDueAt(), clientTag.value, link.value);
   newTodoText.value = '';
   dueDate.value = '';
+  clientTag.value = '';
+  link.value = '';
 };
 
 const onDragStart = (todoId: string) => {
@@ -112,15 +120,35 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         <input
           v-model="dueDate"
           type="date"
-          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 focus:ring-2"
+          class="w-1/2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 focus:ring-2"
           aria-label="Due date"
+        />
+        <input
+          v-model="clientTag"
+          type="text"
+          :list="clientTagsListId"
+          placeholder="Client tag (optional)"
+          class="w-1/2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          aria-label="Client tag"
+        />
+        <datalist :id="clientTagsListId">
+          <option v-for="tag in store.clientTags" :key="tag" :value="tag" />
+        </datalist>
+      </div>
+      <div class="flex items-center gap-2">
+        <input
+          v-model="link"
+          type="url"
+          placeholder="Link (optional)"
+          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          aria-label="Link"
         />
       </div>
     </form>
 
     <div class="mt-4 flex flex-wrap items-center gap-2">
       <button
-        v-for="mode in ['all', 'today', 'upcoming', 'overdue']"
+        v-for="mode in ['all', 'today', 'upcoming', 'overdue', 'completed']"
         :key="mode"
         type="button"
         class="uppercase rounded-full px-3 py-1 text-sm font-medium"
@@ -128,26 +156,6 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         @click="filter = mode as FilterMode"
       >
         {{ mode }}
-      </button>
-    </div>
-
-    <div class="mt-4 flex items-center justify-end">
-      <button
-        type="button"
-        class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
-        aria-label="Clear completed todos"
-        title="Clear completed todos"
-        :disabled="!hasCompleted"
-        @click="store.clearCompleted(stageId)"
-      >
-        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 6h18" />
-          <path d="M8 6V4h8v2" />
-          <path d="M19 6l-1 14H6L5 6" />
-          <path d="M10 11v6" />
-          <path d="M14 11v6" />
-          <path d="M4 4l16 16" />
-        </svg>
       </button>
     </div>
 

@@ -14,9 +14,9 @@ app.use(pinia);
 const todosStore = useTodosStore(pinia);
 
 watch(
-  () => todosStore.todosByStage,
-  debounce((todosByStage) => {
-    saveState({ todosByStage });
+  () => [todosStore.todosByStage, todosStore.clientTags] as const,
+  debounce(([todosByStage, clientTags]) => {
+    saveState({ todosByStage, clientTags });
   }, 200),
   { deep: true }
 );

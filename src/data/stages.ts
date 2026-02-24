@@ -12,6 +12,8 @@ export type Todo = {
   done: boolean;
   createdAt: number;
   dueAt?: number;
+  clientTag?: string;
+  link?: string;
 };
 
 export const stages: Stage[] = [
