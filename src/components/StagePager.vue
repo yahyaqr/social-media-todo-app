@@ -14,9 +14,9 @@ import 'swiper/css/pagination';
     :slides-per-view="1"
     :space-between="0"
     :pagination="{ clickable: true }"
-    class="min-h-[100dvh] bg-slate-100"
+    class="h-full bg-slate-100"
   >
-    <SwiperSlide v-for="(stage, index) in stages" :key="stage.id" class="bg-slate-100">
+    <SwiperSlide v-for="(stage, index) in stages" :key="stage.id" class="h-full bg-slate-100">
       <StagePage :stage="stage" :index="index" :total-stages="stages.length" />
     </SwiperSlide>
   </Swiper>

@@ -16,7 +16,7 @@ const progressText = computed(() => store.stageProgress(props.stage.id));
 </script>
 
 <template>
-  <article class="min-h-[100dvh] overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5">
+  <article class="h-full overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5">
     <header class="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
       <div class="mb-2 flex items-center justify-between gap-3">
         <p class="text-sm font-medium uppercase tracking-wide text-blue-600">Stage {{ index + 1 }} / {{ totalStages }}</p>
