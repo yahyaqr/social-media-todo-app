@@ -23,6 +23,10 @@ const onDragDrop = (): void => {
   emit('dragDrop', props.todo.id);
 };
 
+const openDetails = (): void => {
+  emit('openDetails', props.todo.id);
+};
+
 const dueLabel = computed(() => {
   if (!props.todo.dueAt) {
     return '';
@@ -67,9 +71,10 @@ const timingClass = computed(() => {
 
 <template>
   <li
-    class="flex items-start gap-3 rounded-xl border p-4 shadow-sm"
+    class="flex cursor-pointer items-start gap-3 rounded-xl border p-3 shadow-sm transition hover:shadow"
     :class="[timingClass, { 'opacity-50': dragging }]"
     draggable="true"
+    @click="openDetails"
     @dragstart="onDragStart"
     @dragover.prevent
     @drop="onDragDrop"
@@ -78,24 +83,27 @@ const timingClass = computed(() => {
       :id="todo.id"
       type="checkbox"
       :checked="todo.done"
-      class="mt-1 h-6 w-6 rounded border-slate-300 text-blue-600 accent-blue-600"
+      class="mt-0.5 h-5 w-5 rounded border-slate-300 text-blue-600 accent-blue-600"
+      @click.stop
       @change="emit('toggle', stageId, todo.id)"
     />
 
     <div class="min-w-0 flex-1">
-      <button
-        type="button"
-        class="block w-full text-left text-base leading-6 text-slate-800"
+      <p
+        class="line-clamp-2 text-sm leading-5 font-medium text-slate-800"
         :class="{ 'text-slate-400 line-through': todo.done }"
-        @click="emit('openDetails', todo.id)"
       >
         {{ todo.text }}
-      </button>
-      <p v-if="dueLabel" class="mt-1 text-xs" :class="isOverdue ? 'text-rose-600' : 'text-slate-500'">
-        Due {{ dueLabel }}
       </p>
-      <div v-if="todo.clientTag || todo.link" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-        <span v-if="todo.clientTag" class="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
+      <div v-if="dueLabel || todo.clientTag || todo.link" class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <span
+          v-if="dueLabel"
+          class="rounded-full px-2 py-0.5"
+          :class="isOverdue ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'"
+        >
+          Due {{ dueLabel }}
+        </span>
+        <span v-if="todo.clientTag" class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
           {{ todo.clientTag }}
         </span>
         <a
@@ -103,7 +111,8 @@ const timingClass = computed(() => {
           :href="todo.link"
           target="_blank"
           rel="noopener noreferrer"
-          class="rounded-full bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100"
+          class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100"
+          @click.stop
         >
           Open link
         </a>
