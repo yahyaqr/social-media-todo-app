@@ -2,6 +2,7 @@ export type StageId = 'ideation' | 'research' | 'draft' | 'produce' | 'publish';
 
 export type Stage = {
   id: StageId;
+  day: string;
   title: string;
   description: string;
 };
@@ -20,28 +21,33 @@ export type Todo = {
 export const stages: Stage[] = [
   {
     id: 'ideation',
+    day: 'Monday',
     title: 'Ideation',
-    description: 'Capture angles, hooks, and content themes worth testing.'
+    description: 'Generate and explore content ideas, angles, and creative directions.'
   },
   {
     id: 'research',
-    title: 'Research & Outline',
-    description: 'Validate ideas, gather references, and define your structure.'
+    day: 'Tuesday',
+    title: 'Outlining',
+    description: 'Break down the main ideas into a clear structure and content flow.'
   },
   {
     id: 'draft',
-    title: 'Draft / Script',
-    description: 'Write the first version of your post, script, or talking points.'
+    day: 'Wednesday',
+    title: 'Production',
+    description: 'Produce the core content—write, record, or build the main material.'
   },
   {
     id: 'produce',
-    title: 'Design / Produce',
-    description: 'Create visuals, record clips, and assemble final creative assets.'
+    day: 'Thursday',
+    title: 'Editing',
+    description: 'Edit videos, refine visuals, and finalize graphic design assets.'
   },
   {
     id: 'publish',
-    title: 'Publish & Optimize',
-    description: 'Ship, monitor results, and log improvements for next time.'
+    day: 'Friday',
+    title: 'Publishing',
+    description: 'Publish the content and distribute it to the intended audience.'
   }
 ];
 

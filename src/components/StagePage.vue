@@ -22,7 +22,11 @@ const progressText = computed(() => store.stageProgress(props.stage.id));
         <p class="text-xs font-medium uppercase tracking-wide text-blue-600 sm:text-sm">Stage {{ index + 1 }} / {{ totalStages }}</p>
         <p class="text-xs font-semibold text-slate-600 sm:text-sm">{{ progressText }}</p>
       </div>
-      <h1 class="text-xl font-bold text-slate-900 sm:text-2xl">{{ stage.title }}</h1>
+      <h1 class="text-xl font-bold text-slate-900 sm:text-2xl">
+        <span class="mr-2 text-base font-medium text-slate-500 sm:text-lg">{{ stage.day }}</span>
+        <span class="mr-2 text-slate-300">&bull;</span>
+        <span>{{ stage.title }}</span>
+      </h1>
       <p class="mt-1.5 text-sm leading-5 text-slate-600 sm:mt-2 sm:leading-6">{{ stage.description }}</p>
     </header>
 
