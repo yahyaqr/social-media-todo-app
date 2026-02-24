@@ -102,9 +102,14 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         />
         <button
           type="submit"
-          class="rounded-xl bg-blue-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition active:scale-[0.98]"
+          class="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm transition active:scale-[0.98]"
+          aria-label="Add todo"
+          title="Add todo"
         >
-          Add
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
         </button>
       </div>
       <div class="flex items-center gap-2">
@@ -116,10 +121,19 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         />
         <button
           type="button"
-          class="shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+          class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700"
+          aria-label="Add template todos"
+          title="Add template todos"
           @click="applyTemplate"
         >
-          Add template
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 6h13" />
+            <path d="M8 12h13" />
+            <path d="M8 18h13" />
+            <path d="M3 6h.01" />
+            <path d="M3 12h.01" />
+            <path d="M3 18h.01" />
+          </svg>
         </button>
       </div>
     </form>
@@ -129,7 +143,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         v-for="mode in ['all', 'today', 'upcoming', 'overdue']"
         :key="mode"
         type="button"
-        class="rounded-full px-3 py-1 text-sm font-medium"
+        class="uppercase rounded-full px-3 py-1 text-sm font-medium"
         :class="filter === mode ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-300'"
         @click="filter = mode as FilterMode"
       >
@@ -140,11 +154,20 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <div class="mt-4 flex items-center justify-end">
       <button
         type="button"
-        class="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
+        class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
+        aria-label="Clear completed todos"
+        title="Clear completed todos"
         :disabled="!hasCompleted"
         @click="store.clearCompleted(stageId)"
       >
-        Clear completed
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18" />
+          <path d="M8 6V4h8v2" />
+          <path d="M19 6l-1 14H6L5 6" />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+          <path d="M4 4l16 16" />
+        </svg>
       </button>
     </div>
 

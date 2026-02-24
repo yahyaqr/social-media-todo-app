@@ -169,32 +169,45 @@ const isOverdue = computed(() => {
       <template v-if="isEditing">
         <button
           type="button"
-          class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Save todo"
+          title="Save todo"
           @click="saveEdit"
         >
-          Save
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
         </button>
         <button
           type="button"
-          class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Cancel edit"
+          title="Cancel edit"
           @click="cancelEdit"
         >
-          Cancel
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18" />
+            <path d="M6 6l12 12" />
+          </svg>
         </button>
       </template>
 
       <template v-else>
         <button
           type="button"
-          class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition hover:bg-slate-100 hover:text-slate-700"
           aria-label="Edit todo"
+          title="Edit todo"
           @click="startEdit"
         >
-          Edit
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 113 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
         </button>
         <button
           type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition hover:bg-slate-100 hover:text-slate-700"
           aria-label="Delete todo"
           @click="emit('remove', stageId, todo.id)"
         >
