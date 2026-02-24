@@ -37,6 +37,13 @@ const getNextStageDate = (stageId: StageId): string => {
 };
 
 const filter = ref<FilterMode>('all');
+const filterOptions: Array<{ value: FilterMode; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'today', label: 'Today' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'completed', label: 'Completed' }
+];
 const draggingTodoId = ref<string | null>(null);
 const detailClientTagsListId = computed(() => `detail-client-tags-${props.stageId}`);
 const isAddTaskSheetOpen = ref(false);
@@ -320,22 +327,15 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       @submit="submitFromSheet"
     />
 
-    <div class="relative mt-4">
-      <div class="pointer-events-none absolute inset-y-0 left-0 z-10 w-5 bg-gradient-to-r from-slate-50 to-transparent" />
-      <div class="pointer-events-none absolute inset-y-0 right-0 z-10 w-5 bg-gradient-to-l from-slate-50 to-transparent" />
-      <div class="flex items-center gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button
-          v-for="mode in ['all', 'today', 'upcoming', 'overdue', 'completed']"
-          :key="mode"
-          type="button"
-          class="min-h-8 shrink-0 uppercase rounded-full px-3 py-1 text-xs font-medium"
-          :class="filter === mode ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-300'"
-          @click="filter = mode as FilterMode"
-        >
-          {{ mode }}
-        </button>
-      </div>
-    </div>
+    <select
+      id="todo-filter"
+      v-model="filter"
+      class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none ring-blue-300 focus:ring-2"
+    >
+      <option v-for="option in filterOptions" :key="option.value" :value="option.value">
+        {{ option.label }}
+      </option>
+    </select>
 
     <ul v-if="filteredTodos.length" class="mt-3 space-y-3">
       <TodoItem
