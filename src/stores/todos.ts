@@ -66,6 +66,37 @@ export const useTodosStore = defineStore('todos', () => {
     }
   };
 
+  const updateTodo = (
+    stageId: StageId,
+    todoId: string,
+    updates: {
+      text?: string;
+      dueAt?: number;
+      done?: boolean;
+    }
+  ): void => {
+    const todo = todosByStage.value[stageId].find((item) => item.id === todoId);
+    if (!todo) {
+      return;
+    }
+
+    if (updates.text !== undefined) {
+      const trimmed = updates.text.trim();
+      if (!trimmed) {
+        return;
+      }
+      todo.text = trimmed;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'dueAt')) {
+      todo.dueAt = updates.dueAt;
+    }
+
+    if (updates.done !== undefined) {
+      todo.done = updates.done;
+    }
+  };
+
   const deleteTodo = (stageId: StageId, todoId: string): void => {
     todosByStage.value[stageId] = todosByStage.value[stageId].filter((item) => item.id !== todoId);
   };
@@ -108,6 +139,7 @@ export const useTodosStore = defineStore('todos', () => {
     addTodo,
     addTemplateTodos,
     toggleTodo,
+    updateTodo,
     deleteTodo,
     clearCompleted,
     reorderTodo

@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { StageId, Todo } from '../data/stages';
+
+type TodoUpdates = {
+  text?: string;
+  dueAt?: number;
+  done?: boolean;
+};
 
 const props = defineProps<{
   stageId: StageId;
@@ -13,7 +19,78 @@ const emit = defineEmits<{
   remove: [stageId: StageId, todoId: string];
   dragStart: [todoId: string];
   dragDrop: [targetId: string];
+  updateTodo: [stageId: StageId, todoId: string, updates: TodoUpdates];
 }>();
+
+const isEditing = ref(false);
+const draftText = ref('');
+const draftDueDate = ref('');
+const editError = ref('');
+
+const formatDateInput = (timestamp?: number): string => {
+  if (!timestamp) {
+    return '';
+  }
+
+  const value = new Date(timestamp);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseDueDate = (): number | undefined => {
+  if (!draftDueDate.value) {
+    return undefined;
+  }
+
+  const parsed = new Date(`${draftDueDate.value}T00:00:00`).getTime();
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const startEdit = (): void => {
+  isEditing.value = true;
+  draftText.value = props.todo.text;
+  draftDueDate.value = formatDateInput(props.todo.dueAt);
+  editError.value = '';
+};
+
+const cancelEdit = (): void => {
+  isEditing.value = false;
+  editError.value = '';
+};
+
+const saveEdit = (): void => {
+  const trimmed = draftText.value.trim();
+  if (!trimmed) {
+    editError.value = 'Task text is required.';
+    return;
+  }
+
+  emit('updateTodo', props.stageId, props.todo.id, {
+    text: trimmed,
+    dueAt: parseDueDate()
+  });
+
+  isEditing.value = false;
+  editError.value = '';
+};
+
+const onDragStart = (): void => {
+  if (isEditing.value) {
+    return;
+  }
+
+  emit('dragStart', props.todo.id);
+};
+
+const onDragDrop = (): void => {
+  if (isEditing.value) {
+    return;
+  }
+
+  emit('dragDrop', props.todo.id);
+};
 
 const dueLabel = computed(() => {
   if (!props.todo.dueAt) {
@@ -41,43 +118,95 @@ const isOverdue = computed(() => {
   <li
     class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
     :class="{ 'opacity-50': dragging }"
-    draggable="true"
-    @dragstart="emit('dragStart', todo.id)"
+    :draggable="!isEditing"
+    @dragstart="onDragStart"
     @dragover.prevent
-    @drop="emit('dragDrop', todo.id)"
+    @drop="onDragDrop"
   >
     <input
       :id="todo.id"
       type="checkbox"
       :checked="todo.done"
       class="mt-1 h-6 w-6 rounded border-slate-300 text-blue-600 accent-blue-600"
+      :disabled="isEditing"
       @change="emit('toggle', stageId, todo.id)"
     />
+
     <div class="min-w-0 flex-1">
-      <label
-        :for="todo.id"
-        class="block text-base leading-6 text-slate-800"
-        :class="{ 'text-slate-400 line-through': todo.done }"
-      >
-        {{ todo.text }}
-      </label>
-      <p v-if="dueLabel" class="mt-1 text-xs" :class="isOverdue ? 'text-rose-600' : 'text-slate-500'">
-        Due {{ dueLabel }}
-      </p>
+      <template v-if="isEditing">
+        <input
+          v-model="draftText"
+          type="text"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+          @keydown.enter.prevent="saveEdit"
+          @keydown.esc.prevent="cancelEdit"
+        />
+        <input
+          v-model="draftDueDate"
+          type="date"
+          class="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+          @keydown.enter.prevent="saveEdit"
+          @keydown.esc.prevent="cancelEdit"
+        />
+        <p v-if="editError" class="mt-1 text-xs text-rose-600">{{ editError }}</p>
+      </template>
+
+      <template v-else>
+        <label
+          :for="todo.id"
+          class="block text-base leading-6 text-slate-800"
+          :class="{ 'text-slate-400 line-through': todo.done }"
+        >
+          {{ todo.text }}
+        </label>
+        <p v-if="dueLabel" class="mt-1 text-xs" :class="isOverdue ? 'text-rose-600' : 'text-slate-500'">
+          Due {{ dueLabel }}
+        </p>
+      </template>
     </div>
-    <button
-      type="button"
-      class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-      aria-label="Delete todo"
-      @click="emit('remove', stageId, todo.id)"
-    >
-      <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 6h18" />
-        <path d="M8 6V4h8v2" />
-        <path d="M19 6l-1 14H6L5 6" />
-        <path d="M10 11v6" />
-        <path d="M14 11v6" />
-      </svg>
-    </button>
+
+    <div class="flex shrink-0 items-center gap-2">
+      <template v-if="isEditing">
+        <button
+          type="button"
+          class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          @click="saveEdit"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          @click="cancelEdit"
+        >
+          Cancel
+        </button>
+      </template>
+
+      <template v-else>
+        <button
+          type="button"
+          class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
+          aria-label="Edit todo"
+          @click="startEdit"
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Delete todo"
+          @click="emit('remove', stageId, todo.id)"
+        >
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
+        </button>
+      </template>
+    </div>
   </li>
 </template>

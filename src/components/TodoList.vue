@@ -156,6 +156,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         :todo="todo"
         :dragging="isDragging(todo)"
         @toggle="store.toggleTodo"
+        @update-todo="store.updateTodo"
         @remove="store.deleteTodo"
         @drag-start="onDragStart"
         @drag-drop="onDragDrop"
