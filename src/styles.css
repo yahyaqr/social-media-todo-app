@@ -28,3 +28,13 @@ textarea {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+.date-input {
+  box-sizing: border-box;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+  height: 48px;
+  padding-block: 10px;
+}
