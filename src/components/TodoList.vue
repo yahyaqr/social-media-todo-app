@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue';
 import { useTodosStore } from '../stores/todos';
 import type { StageId, Todo } from '../data/stages';
 import AddTaskSheet from './AddTaskSheet.vue';
+import BasicDropdown from './BasicDropdown.vue';
 import TodoItem from './TodoItem.vue';
 
 type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -327,15 +328,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       @submit="submitFromSheet"
     />
 
-    <select
-      id="todo-filter"
-      v-model="filter"
-      class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-800 outline-none ring-blue-300 focus:ring-2"
-    >
-      <option v-for="option in filterOptions" :key="option.value" :value="option.value">
-        {{ option.label }}
-      </option>
-    </select>
+    <BasicDropdown v-model="filter" :options="filterOptions" label="Filter" />
 
     <ul v-if="filteredTodos.length" class="mt-3 space-y-3">
       <TodoItem
