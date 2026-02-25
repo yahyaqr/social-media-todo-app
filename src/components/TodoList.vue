@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useTodosStore } from '../stores/todos';
+import { useAuthStore } from '../stores/auth';
 import { stages, type StageId, type Todo } from '../data/stages';
 import AddTaskSheet from './AddTaskSheet.vue';
 import BasicDropdown from './BasicDropdown.vue';
@@ -14,6 +15,7 @@ const props = defineProps<{
 }>();
 
 const store = useTodosStore();
+const authStore = useAuthStore();
 const stageWeekday: Record<StageId, number> = {
   ideation: 1,
   research: 2,
@@ -50,6 +52,7 @@ const filterOptions: Array<{ value: FilterMode; label: string }> = [
 const draggingTodoId = ref<string | null>(null);
 const isAddTaskSheetOpen = ref(false);
 const selectedTodoId = ref<string | null>(null);
+const isProfileOpen = ref(false);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
 const selectedTodo = computed(() => todos.value.find((todo) => todo.id === selectedTodoId.value) ?? null);
@@ -111,6 +114,23 @@ const openAddTaskSheet = (): void => {
 
 const closeAddTaskSheet = (): void => {
   isAddTaskSheetOpen.value = false;
+};
+
+const toggleProfile = (): void => {
+  isProfileOpen.value = !isProfileOpen.value;
+};
+
+const closeProfile = (): void => {
+  isProfileOpen.value = false;
+};
+
+const signOut = async (): Promise<void> => {
+  try {
+    await authStore.signOutCurrentUser();
+    closeProfile();
+  } catch {
+    // App auth state will surface errors in the auth screen.
+  }
 };
 
 const submitFromSheet = (payload: {
@@ -225,18 +245,52 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       No tasks in this filter yet.
     </p>
 
-    <button
+    <div
       v-if="!selectedTodo && !isAddTaskSheetOpen"
-      type="button"
-      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98] sm:right-6"
-      @click="openAddTaskSheet"
+      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-2 sm:right-6"
     >
-      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 5v14" />
-        <path d="M5 12h14" />
-      </svg>
-      Add Task
-    </button>
+      <button
+        type="button"
+        class="inline-flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-lg transition hover:bg-slate-100 active:scale-[0.98]"
+        aria-label="Open account menu"
+        title="Account"
+        @click="toggleProfile"
+      >
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20a8 8 0 0116 0" />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98]"
+        @click="openAddTaskSheet"
+      >
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+        Add Task
+      </button>
+    </div>
+
+    <div v-if="isProfileOpen" class="fixed inset-0 z-30" @click="closeProfile" />
+    <section
+      v-if="isProfileOpen"
+      class="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 w-[min(88vw,19rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:right-6"
+      @click.stop
+    >
+      <p class="truncate text-xs font-medium text-slate-500">Signed in as</p>
+      <p class="truncate text-sm font-semibold text-slate-900">{{ authStore.user?.email ?? 'No email' }}</p>
+      <button
+        type="button"
+        class="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+        @click="signOut"
+      >
+        Sign Out
+      </button>
+    </section>
 
     <TaskDetailSheet
       :visible="Boolean(selectedTodo)"
