@@ -7,6 +7,7 @@ import {
   importStateToCloud,
   saveCloudClientTags,
   subscribeToCloudState,
+  syncCloudStageOrders,
   syncCloudStageOrder,
   upsertCloudTodo,
   deleteCloudTodo,
@@ -15,7 +16,7 @@ import {
 import { isFirebaseConfigured } from '../lib/firebase';
 import { loadState, type PersistedState, type TodosByStage } from '../utils/storage';
 
-const CLOUD_MIGRATION_KEY = 'sm_todo_cloud_migrated_v1';
+const CLOUD_MIGRATION_KEY_PREFIX = 'sm_todo_cloud_migrated_v1_';
 
 const createId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -180,6 +181,8 @@ export const useTodosStore = defineStore('todos', () => {
   const syncStageOrder = (stageId: StageId): void => {
     runCloudWrite((uid) => syncCloudStageOrder(uid, stageId, todosByStage.value[stageId]));
   };
+
+  const getCloudMigrationKey = (uid: string): string => `${CLOUD_MIGRATION_KEY_PREFIX}${uid}`;
 
   const rememberClientTag = (value?: string): void => {
     const normalized = normalizeClientTag(value);
@@ -372,9 +375,12 @@ export const useTodosStore = defineStore('todos', () => {
     todosByStage.value[fromStageId] = source;
     todosByStage.value[toStageId] = [moved, ...todosByStage.value[toStageId]];
 
-    syncTodoAt(toStageId, moved.id);
-    syncStageOrder(fromStageId);
-    syncStageOrder(toStageId);
+    runCloudWrite((uid) =>
+      syncCloudStageOrders(uid, [
+        { stageId: fromStageId, todos: todosByStage.value[fromStageId] },
+        { stageId: toStageId, todos: todosByStage.value[toStageId] }
+      ])
+    );
     return true;
   };
 
@@ -411,7 +417,8 @@ export const useTodosStore = defineStore('todos', () => {
         const uid = await ensureSignedInUid();
         cloudUid.value = uid;
 
-        const shouldMigrate = localStorage.getItem(CLOUD_MIGRATION_KEY) !== '1';
+        const migrationKey = getCloudMigrationKey(uid);
+        const shouldMigrate = localStorage.getItem(migrationKey) !== '1';
         const remoteHasData = await hasAnyRemoteData(uid);
 
         if (shouldMigrate && !remoteHasData) {
@@ -424,7 +431,7 @@ export const useTodosStore = defineStore('todos', () => {
         }
 
         if (shouldMigrate) {
-          localStorage.setItem(CLOUD_MIGRATION_KEY, '1');
+          localStorage.setItem(migrationKey, '1');
         }
 
         cloudUnsubscribe = subscribeToCloudState(

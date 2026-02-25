@@ -268,21 +268,30 @@ export const syncCloudStageOrder = async (
   stageId: StageId,
   todos: Todo[]
 ): Promise<void> => {
+  await syncCloudStageOrders(uid, [{ stageId, todos }]);
+};
+
+export const syncCloudStageOrders = async (
+  uid: string,
+  updates: Array<{ stageId: StageId; todos: Todo[] }>
+): Promise<void> => {
   const db = getFirestoreDb();
   const batch = writeBatch(db);
 
-  todos.forEach((todo, index) => {
-    const todoRef = doc(db, 'users', uid, 'todos', todo.id);
-    batch.set(
-      todoRef,
-      {
-        stageId,
-        order: index,
-        updatedAt: serverTimestamp()
-      },
-      { merge: true }
-    );
-  });
+  for (const update of updates) {
+    update.todos.forEach((todo, index) => {
+      const todoRef = doc(db, 'users', uid, 'todos', todo.id);
+      batch.set(
+        todoRef,
+        {
+          stageId: update.stageId,
+          order: index,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+    });
+  }
 
   await batch.commit();
 };
