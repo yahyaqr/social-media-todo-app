@@ -7,7 +7,7 @@ type TaskUpdates = {
   dueAt?: number;
   done?: boolean;
   clientTag?: string;
-  link?: string;
+  links?: string[];
   content?: string;
 };
 
@@ -41,7 +41,8 @@ const emit = defineEmits<{
 const detailTitle = ref('');
 const detailDueDate = ref('');
 const detailClientTag = ref('');
-const detailLink = ref('');
+const detailLinks = ref<string[]>([]);
+const detailLinkInput = ref('');
 const detailContent = ref('');
 const detailContentInput = ref<HTMLTextAreaElement | null>(null);
 const showContentPreview = ref(false);
@@ -102,7 +103,8 @@ watch(
     detailTitle.value = todo.text;
     detailDueDate.value = formatDateInput(todo.dueAt);
     detailClientTag.value = todo.clientTag ?? '';
-    detailLink.value = todo.link ?? '';
+    detailLinks.value = [...(todo.links ?? [])];
+    detailLinkInput.value = '';
     detailContent.value = todo.content ?? '';
     showContentPreview.value = false;
     showClientTagSuggestions.value = false;
@@ -120,7 +122,7 @@ const saveDetails = (): void => {
     text: trimmedTitle,
     dueAt: parseDate(detailDueDate.value),
     clientTag: detailClientTag.value,
-    link: detailLink.value,
+    links: detailLinks.value,
     content: normalizeBulletLines(detailContent.value)
   });
 };
@@ -155,6 +157,22 @@ const onClientTagInput = (): void => {
 const selectClientTag = (tag: string): void => {
   detailClientTag.value = tag;
   showClientTagSuggestions.value = false;
+  saveDetails();
+};
+
+const appendDetailLink = (): void => {
+  const trimmed = detailLinkInput.value.trim();
+  if (!trimmed || detailLinks.value.includes(trimmed)) {
+    return;
+  }
+
+  detailLinks.value = [...detailLinks.value, trimmed];
+  detailLinkInput.value = '';
+  saveDetails();
+};
+
+const removeDetailLink = (index: number): void => {
+  detailLinks.value = detailLinks.value.filter((_, current) => current !== index);
   saveDetails();
 };
 
@@ -332,14 +350,54 @@ const createdLabel = computed(() => {
                 </button>
               </div>
             </div>
-            <input
-              v-model="detailLink"
-              type="url"
-              placeholder="Link"
-              class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2 md:col-span-2"
-              aria-label="Task link"
-              @change="saveDetails"
-            />
+            <div class="space-y-2 md:col-span-2">
+              <div class="flex gap-2">
+                <input
+                  v-model="detailLinkInput"
+                  type="url"
+                  placeholder="Add link"
+                  class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+                  aria-label="Task link"
+                  @keydown.enter.prevent="appendDetailLink"
+                />
+                <button
+                  type="button"
+                  class="inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl border border-slate-300 px-3 text-slate-700 hover:bg-slate-100"
+                  aria-label="Add link"
+                  title="Add link"
+                  @click="appendDetailLink"
+                >
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+              </div>
+
+              <div v-if="detailLinks.length" class="space-y-1">
+                <div
+                  v-for="(item, index) in detailLinks"
+                  :key="`${item}-${index}`"
+                  class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+                >
+                  <a :href="item" target="_blank" rel="noopener noreferrer" class="truncate text-blue-700 hover:underline">
+                    {{ item }}
+                  </a>
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                    aria-label="Remove link"
+                    title="Remove link"
+                    @click="removeDetailLink(index)"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M18 6L6 18" />
+                      <path d="M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">

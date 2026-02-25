@@ -14,7 +14,7 @@ export type Todo = {
   createdAt: number;
   dueAt?: number;
   clientTag?: string;
-  link?: string;
+  links?: string[];
   content?: string;
 };
 
@@ -87,4 +87,3 @@ export const seedTodosByStage: Record<StageId, Todo[]> = {
     makeSeed('Review metrics and note one improvement', 15)
   ]
 };
-

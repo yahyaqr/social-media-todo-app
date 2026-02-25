@@ -113,8 +113,13 @@ const closeAddTaskSheet = (): void => {
   isAddTaskSheetOpen.value = false;
 };
 
-const submitFromSheet = (payload: { text: string; dueDate: string; clientTag: string; link: string }): void => {
-  store.addTodo(props.stageId, payload.text, parseDate(payload.dueDate), payload.clientTag, payload.link);
+const submitFromSheet = (payload: {
+  text: string;
+  dueDate: string;
+  clientTag: string;
+  links: string[];
+}): void => {
+  store.addTodo(props.stageId, payload.text, parseDate(payload.dueDate), payload.clientTag, payload.links);
 };
 
 const openDetails = (todoId: string): void => {
@@ -145,7 +150,7 @@ const updateDetails = (updates: {
   dueAt?: number;
   done?: boolean;
   clientTag?: string;
-  link?: string;
+  links?: string[];
   content?: string;
 }): void => {
   const todo = selectedTodo.value;

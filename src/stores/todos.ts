@@ -24,6 +24,20 @@ const normalizeLink = (value?: string): string | undefined => {
   return `https://${trimmed}`;
 };
 
+const normalizeLinks = (values: string[] = []): string[] | undefined => {
+  const unique = new Set<string>();
+
+  for (const value of values) {
+    const normalized = normalizeLink(value);
+    if (normalized) {
+      unique.add(normalized);
+    }
+  }
+
+  const normalizedList = [...unique];
+  return normalizedList.length ? normalizedList : undefined;
+};
+
 const normalizeClientTag = (value?: string): string | undefined => {
   const trimmed = value?.trim();
   return trimmed || undefined;
@@ -62,9 +76,22 @@ const buildClientTagCatalog = (todosByStage: TodosByStage, existing: string[] = 
 const createInitialState = (): PersistedState => {
   const loaded = loadState();
   const todosByStage = loaded?.todosByStage ?? structuredClone(seedTodosByStage);
-  const clientTags = buildClientTagCatalog(todosByStage, loaded?.clientTags ?? []);
+  const normalizedTodosByStage = structuredClone(todosByStage);
 
-  return { todosByStage, clientTags };
+  for (const stage of stages) {
+    const list = normalizedTodosByStage[stage.id] ?? [];
+    normalizedTodosByStage[stage.id] = list.map((todo) => {
+      const legacy = todo as typeof todo & { link?: string };
+      const normalized = normalizeLinks(todo.links ?? (legacy.link ? [legacy.link] : []));
+      return {
+        ...todo,
+        links: normalized
+      };
+    });
+  }
+  const clientTags = buildClientTagCatalog(normalizedTodosByStage, loaded?.clientTags ?? []);
+
+  return { todosByStage: normalizedTodosByStage, clientTags };
 };
 
 export const useTodosStore = defineStore('todos', () => {
@@ -111,7 +138,7 @@ export const useTodosStore = defineStore('todos', () => {
     text: string,
     dueAt?: number,
     clientTag?: string,
-    link?: string,
+    links?: string[],
     content?: string
   ): void => {
     const trimmed = text.trim();
@@ -120,7 +147,7 @@ export const useTodosStore = defineStore('todos', () => {
     }
 
     const normalizedClientTag = normalizeClientTag(clientTag);
-    const normalizedLink = normalizeLink(link);
+    const normalizedLinks = normalizeLinks(links);
     const normalizedContent = normalizeContent(content);
 
     rememberClientTag(normalizedClientTag);
@@ -132,7 +159,7 @@ export const useTodosStore = defineStore('todos', () => {
       createdAt: Date.now(),
       dueAt,
       clientTag: normalizedClientTag,
-      link: normalizedLink,
+      links: normalizedLinks,
       content: normalizedContent
     });
   };
@@ -152,7 +179,7 @@ export const useTodosStore = defineStore('todos', () => {
       dueAt?: number;
       done?: boolean;
       clientTag?: string;
-      link?: string;
+      links?: string[];
       content?: string;
     }
   ): void => {
@@ -178,8 +205,8 @@ export const useTodosStore = defineStore('todos', () => {
       rememberClientTag(todo.clientTag);
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'link')) {
-      todo.link = normalizeLink(updates.link);
+    if (Object.prototype.hasOwnProperty.call(updates, 'links')) {
+      todo.links = normalizeLinks(updates.links ?? []);
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'content')) {
@@ -239,6 +266,14 @@ export const useTodosStore = defineStore('todos', () => {
       if (!Array.isArray(todosByStage.value[stage.id])) {
         todosByStage.value[stage.id] = [];
       }
+
+      todosByStage.value[stage.id] = todosByStage.value[stage.id].map((todo) => {
+        const legacy = todo as typeof todo & { link?: string };
+        return {
+          ...todo,
+          links: normalizeLinks(todo.links ?? (legacy.link ? [legacy.link] : []))
+        };
+      });
     }
   };
 

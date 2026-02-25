@@ -9,13 +9,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  submit: [payload: { text: string; dueDate: string; clientTag: string; link: string }];
+  submit: [payload: { text: string; dueDate: string; clientTag: string; links: string[] }];
 }>();
 
 const newTodoText = ref('');
 const dueDate = ref('');
 const clientTag = ref('');
-const link = ref('');
+const links = ref<string[]>([]);
+const newLink = ref('');
 const showClientTagSuggestions = ref(false);
 
 watch(
@@ -40,7 +41,22 @@ const filteredClientTags = computed(() => {
 
 const close = (): void => {
   showClientTagSuggestions.value = false;
+  newLink.value = '';
   emit('close');
+};
+
+const appendLink = (): void => {
+  const trimmed = newLink.value.trim();
+  if (!trimmed || links.value.includes(trimmed)) {
+    return;
+  }
+
+  links.value = [...links.value, trimmed];
+  newLink.value = '';
+};
+
+const removeLink = (index: number): void => {
+  links.value = links.value.filter((_, current) => current !== index);
 };
 
 const submit = (): void => {
@@ -49,17 +65,20 @@ const submit = (): void => {
     return;
   }
 
+  appendLink();
+
   emit('submit', {
     text: trimmed,
     dueDate: dueDate.value,
     clientTag: clientTag.value,
-    link: link.value
+    links: links.value
   });
 
   newTodoText.value = '';
   dueDate.value = props.initialDueDate;
   clientTag.value = '';
-  link.value = '';
+  links.value = [];
+  newLink.value = '';
   showClientTagSuggestions.value = false;
   emit('close');
 };
@@ -154,13 +173,53 @@ const selectClientTag = (tag: string): void => {
           </div>
         </div>
 
-        <input
-          v-model="link"
-          type="url"
-          placeholder="Link (optional)"
-          class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
-          aria-label="Link"
-        />
+        <div class="space-y-2">
+          <div class="flex gap-2">
+            <input
+              v-model="newLink"
+              type="url"
+              placeholder="Add link (optional)"
+              class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
+              aria-label="Add link"
+              @keydown.enter.prevent="appendLink"
+            />
+            <button
+              type="button"
+              class="inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl border border-slate-300 px-3 text-slate-700 hover:bg-slate-100"
+              aria-label="Add link"
+              title="Add link"
+              @click="appendLink"
+            >
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
+          <div v-if="links.length" class="space-y-1">
+            <div
+              v-for="(item, index) in links"
+              :key="`${item}-${index}`"
+              class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+            >
+              <a :href="item" target="_blank" rel="noopener noreferrer" class="truncate text-blue-700 hover:underline">
+                {{ item }}
+              </a>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                aria-label="Remove link"
+                title="Remove link"
+                @click="removeLink(index)"
+              >
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18" />
+                  <path d="M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
 
         <button
           type="submit"

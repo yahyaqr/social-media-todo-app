@@ -67,6 +67,10 @@ const timingClass = computed(() => {
 
   return 'border-sky-200 bg-sky-50';
 });
+
+const linkList = computed(() => props.todo.links ?? []);
+const primaryLink = computed(() => linkList.value[0]);
+const extraLinkCount = computed(() => Math.max(0, linkList.value.length - 1));
 </script>
 
 <template>
@@ -95,7 +99,7 @@ const timingClass = computed(() => {
       >
         {{ todo.text }}
       </p>
-      <div v-if="dueLabel || todo.clientTag || todo.link" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
+      <div v-if="dueLabel || todo.clientTag || linkList.length" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
         <span
           v-if="dueLabel"
           class="rounded-full px-2 py-0.5"
@@ -107,8 +111,8 @@ const timingClass = computed(() => {
           {{ todo.clientTag }}
         </span>
         <a
-          v-if="todo.link"
-          :href="todo.link"
+          v-if="primaryLink"
+          :href="primaryLink"
           target="_blank"
           rel="noopener noreferrer"
           class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100"
@@ -116,6 +120,9 @@ const timingClass = computed(() => {
         >
           Open link
         </a>
+        <span v-if="extraLinkCount" class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
+          +{{ extraLinkCount }} more
+        </span>
       </div>
     </div>
   </li>
