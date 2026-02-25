@@ -1,22 +1,18 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { seedTodosByStage, stages, type StageId, type Todo } from '../data/stages';
+import { stages, type StageId, type Todo } from '../data/stages';
 import {
   ensureSignedInUid,
-  hasAnyRemoteData,
-  importStateToCloud,
   saveCloudClientTags,
   subscribeToCloudState,
   syncCloudStageOrders,
   syncCloudStageOrder,
   upsertCloudTodo,
   deleteCloudTodo,
-  type CloudSnapshot
+  type CloudSnapshot,
+  type TodosByStage
 } from '../services/firestoreTodos';
 import { isFirebaseConfigured } from '../lib/firebase';
-import { loadState, type PersistedState, type TodosByStage } from '../utils/storage';
-
-const CLOUD_MIGRATION_KEY_PREFIX = 'sm_todo_cloud_migrated_v1_';
 
 const createId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -96,34 +92,9 @@ const buildClientTagCatalog = (todosByStage: TodosByStage, existing: string[] = 
   return [...tags].sort((a, b) => a.localeCompare(b));
 };
 
-const createInitialState = (): PersistedState => {
-  const loaded = loadState();
-  const todosByStage = loaded?.todosByStage ?? structuredClone(seedTodosByStage);
-  const normalizedTodosByStage: TodosByStage = {
-    ...createEmptyTodosByStage(),
-    ...structuredClone(todosByStage)
-  };
-
-  for (const stage of stages) {
-    const list = normalizedTodosByStage[stage.id] ?? [];
-    normalizedTodosByStage[stage.id] = list.map((todo) => {
-      const legacy = todo as typeof todo & { link?: string };
-      const normalized = normalizeLinks(todo.links ?? (legacy.link ? [legacy.link] : []));
-      return {
-        ...todo,
-        links: normalized
-      };
-    });
-  }
-  const clientTags = buildClientTagCatalog(normalizedTodosByStage, loaded?.clientTags ?? []);
-
-  return { todosByStage: normalizedTodosByStage, clientTags };
-};
-
 export const useTodosStore = defineStore('todos', () => {
-  const initialState = createInitialState();
-  const todosByStage = ref<TodosByStage>(initialState.todosByStage);
-  const rememberedClientTags = ref<string[]>(initialState.clientTags ?? []);
+  const todosByStage = ref<TodosByStage>(createEmptyTodosByStage());
+  const rememberedClientTags = ref<string[]>([]);
   const cloudReady = ref(false);
   const cloudError = ref<string | null>(null);
 
@@ -181,8 +152,6 @@ export const useTodosStore = defineStore('todos', () => {
   const syncStageOrder = (stageId: StageId): void => {
     runCloudWrite((uid) => syncCloudStageOrder(uid, stageId, todosByStage.value[stageId]));
   };
-
-  const getCloudMigrationKey = (uid: string): string => `${CLOUD_MIGRATION_KEY_PREFIX}${uid}`;
 
   const rememberClientTag = (value?: string): void => {
     const normalized = normalizeClientTag(value);
@@ -384,24 +353,6 @@ export const useTodosStore = defineStore('todos', () => {
     return true;
   };
 
-  const ensureStageShape = (): void => {
-    for (const stage of stages) {
-      if (!Array.isArray(todosByStage.value[stage.id])) {
-        todosByStage.value[stage.id] = [];
-      }
-
-      todosByStage.value[stage.id] = todosByStage.value[stage.id].map((todo) => {
-        const legacy = todo as typeof todo & { link?: string };
-        return {
-          ...todo,
-          links: normalizeLinks(todo.links ?? (legacy.link ? [legacy.link] : [])),
-          clientTag: normalizeClientTag(todo.clientTag),
-          content: normalizeContent(todo.content)
-        };
-      });
-    }
-  };
-
   const initCloudSync = async (): Promise<void> => {
     if (cloudReady.value || cloudInitPromise) {
       return cloudInitPromise ?? Promise.resolve();
@@ -416,23 +367,6 @@ export const useTodosStore = defineStore('todos', () => {
       try {
         const uid = await ensureSignedInUid();
         cloudUid.value = uid;
-
-        const migrationKey = getCloudMigrationKey(uid);
-        const shouldMigrate = localStorage.getItem(migrationKey) !== '1';
-        const remoteHasData = await hasAnyRemoteData(uid);
-
-        if (shouldMigrate && !remoteHasData) {
-          const migrationState: PersistedState = {
-            todosByStage: structuredClone(todosByStage.value),
-            clientTags: [...clientTags.value]
-          };
-
-          await importStateToCloud(uid, migrationState);
-        }
-
-        if (shouldMigrate) {
-          localStorage.setItem(migrationKey, '1');
-        }
 
         cloudUnsubscribe = subscribeToCloudState(
           uid,
@@ -464,8 +398,6 @@ export const useTodosStore = defineStore('todos', () => {
     cloudReady.value = false;
     cloudUid.value = null;
   };
-
-  ensureStageShape();
 
   return {
     todosByStage,

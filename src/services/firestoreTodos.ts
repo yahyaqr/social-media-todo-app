@@ -4,19 +4,16 @@ import {
   deleteDoc,
   deleteField,
   doc,
-  getDoc,
-  getDocs,
-  limit,
   onSnapshot,
-  query,
   serverTimestamp,
   setDoc,
   type Unsubscribe,
   writeBatch
 } from 'firebase/firestore';
 import { stages, type StageId, type Todo } from '../data/stages';
-import type { PersistedState, TodosByStage } from '../utils/storage';
 import { getFirebaseAuth, getFirestoreDb } from '../lib/firebase';
+
+export type TodosByStage = Record<StageId, Todo[]>;
 
 export type CloudSnapshot = {
   todosByStage: TodosByStage;
@@ -138,39 +135,6 @@ export const ensureSignedInUid = async (): Promise<string> => {
   }
 
   return authPromise as Promise<string>;
-};
-
-export const hasAnyRemoteData = async (uid: string): Promise<boolean> => {
-  const [todoDocs, profileDoc] = await Promise.all([
-    getDocs(query(userTodosCollection(uid), limit(1))),
-    getDoc(userProfileRef(uid))
-  ]);
-
-  return !todoDocs.empty || profileDoc.exists();
-};
-
-export const importStateToCloud = async (uid: string, state: PersistedState): Promise<void> => {
-  const db = getFirestoreDb();
-  const batch = writeBatch(db);
-
-  for (const stage of stages) {
-    const list = state.todosByStage[stage.id] ?? [];
-    list.forEach((todo, index) => {
-      const todoRef = doc(db, 'users', uid, 'todos', todo.id);
-      batch.set(todoRef, serializeTodo(todo, stage.id, index), { merge: true });
-    });
-  }
-
-  batch.set(
-    userProfileRef(uid),
-    {
-      clientTags: normalizeClientTags(state.clientTags),
-      updatedAt: serverTimestamp()
-    },
-    { merge: true }
-  );
-
-  await batch.commit();
 };
 
 export const subscribeToCloudState = (

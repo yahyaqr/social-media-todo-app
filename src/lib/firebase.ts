@@ -1,6 +1,6 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { enableIndexedDbPersistence, getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -26,3 +26,18 @@ const getFirebaseApp = (): FirebaseApp => {
 export const getFirebaseAuth = () => getAuth(getFirebaseApp());
 
 export const getFirestoreDb = () => getFirestore(getFirebaseApp());
+
+let firestorePersistencePromise: Promise<void> | null = null;
+
+export const initFirestorePersistence = async (): Promise<void> => {
+  if (!isFirebaseConfigured || firestorePersistencePromise) {
+    return firestorePersistencePromise ?? Promise.resolve();
+  }
+
+  const db = getFirestoreDb();
+  firestorePersistencePromise = enableIndexedDbPersistence(db)
+    .then(() => undefined)
+    .catch(() => undefined);
+
+  return firestorePersistencePromise;
+};
