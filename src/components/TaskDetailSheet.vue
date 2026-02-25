@@ -176,6 +176,18 @@ const removeDetailLink = (index: number): void => {
   saveDetails();
 };
 
+const confirmDelete = (): void => {
+  const shouldDelete = window.confirm(
+    'This action will permanently delete this task. Are you sure you want to continue?'
+  );
+
+  if (!shouldDelete) {
+    return;
+  }
+
+  emit('delete');
+};
+
 const onContentInput = (): void => {
   const normalized = normalizeBulletLines(detailContent.value);
   if (normalized !== detailContent.value) {
@@ -494,7 +506,7 @@ const createdLabel = computed(() => {
                 class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 text-rose-700 hover:bg-rose-50"
                 aria-label="Delete task"
                 title="Delete"
-                @click="emit('delete')"
+                @click="confirmDelete"
               >
                 <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 6h18" />
