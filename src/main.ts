@@ -21,6 +21,8 @@ watch(
   { deep: true }
 );
 
+void todosStore.initCloudSync();
+
 registerSW({ immediate: true });
 
 app.mount('#app');
