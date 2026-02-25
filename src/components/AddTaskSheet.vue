@@ -86,7 +86,7 @@ const selectClientTag = (tag: string): void => {
 
 <template>
   <Transition name="sheet-fade">
-    <div v-if="visible" class="fixed inset-0 z-40 bg-slate-900/35" @click="close" />
+    <div v-if="visible" class="fixed inset-0 z-40 bg-slate-100/95" @click="close" />
   </Transition>
 
   <Transition name="sheet-up">
