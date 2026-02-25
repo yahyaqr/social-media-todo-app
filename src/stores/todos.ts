@@ -395,6 +395,8 @@ export const useTodosStore = defineStore('todos', () => {
       cloudUnsubscribe = null;
     }
 
+    todosByStage.value = createEmptyTodosByStage();
+    rememberedClientTags.value = [];
     cloudReady.value = false;
     cloudUid.value = null;
   };

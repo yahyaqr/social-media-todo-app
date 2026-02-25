@@ -1,4 +1,3 @@
-import { signInAnonymously } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -118,23 +117,13 @@ const userTodosCollection = (uid: string) => collection(getFirestoreDb(), 'users
 
 const userProfileRef = (uid: string) => doc(getFirestoreDb(), 'users', uid, 'meta', 'profile');
 
-let authPromise: Promise<string> | null = null;
-
 export const ensureSignedInUid = async (): Promise<string> => {
   const auth = getFirebaseAuth();
   if (auth.currentUser?.uid) {
     return auth.currentUser.uid;
   }
 
-  if (!authPromise) {
-    authPromise = signInAnonymously(auth)
-      .then((credential) => credential.user.uid)
-      .finally(() => {
-        authPromise = null;
-      });
-  }
-
-  return authPromise as Promise<string>;
+  throw new Error('User is not signed in.');
 };
 
 export const subscribeToCloudState = (
