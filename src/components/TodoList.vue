@@ -247,7 +247,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
 
     <div
       v-if="!selectedTodo && !isAddTaskSheetOpen"
-      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-2 sm:right-6"
+      class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-full px-4 z-30 flex justify-between items-center gap-2"
     >
       <button
         type="button"
@@ -278,7 +278,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <div v-if="isProfileOpen" class="fixed inset-0 z-30" @click="closeProfile" />
     <section
       v-if="isProfileOpen"
-      class="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 w-[min(88vw,19rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:right-6"
+      class="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] left-4 z-40 w-[min(88vw,19rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl sm:right-6"
       @click.stop
     >
       <p class="truncate text-xs font-medium text-slate-500">Signed in as</p>
