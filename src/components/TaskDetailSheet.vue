@@ -45,6 +45,7 @@ const detailLink = ref('');
 const detailContent = ref('');
 const detailContentInput = ref<HTMLTextAreaElement | null>(null);
 const showContentPreview = ref(false);
+const showClientTagSuggestions = ref(false);
 
 const formatDateInput = (timestamp?: number): string => {
   if (!timestamp) {
@@ -104,6 +105,7 @@ watch(
     detailLink.value = todo.link ?? '';
     detailContent.value = todo.content ?? '';
     showContentPreview.value = false;
+    showClientTagSuggestions.value = false;
   },
   { immediate: true }
 );
@@ -125,6 +127,35 @@ const saveDetails = (): void => {
 
 const toggleDone = (done: boolean): void => {
   emit('update', { done });
+};
+
+const filteredClientTags = computed(() => {
+  const query = detailClientTag.value.trim().toLowerCase();
+  if (!query) {
+    return props.clientTags.slice(0, 8);
+  }
+
+  return props.clientTags.filter((tag) => tag.toLowerCase().includes(query)).slice(0, 8);
+});
+
+const onClientTagFocus = (): void => {
+  showClientTagSuggestions.value = true;
+};
+
+const onClientTagBlur = (): void => {
+  window.setTimeout(() => {
+    showClientTagSuggestions.value = false;
+  }, 120);
+};
+
+const onClientTagInput = (): void => {
+  showClientTagSuggestions.value = true;
+};
+
+const selectClientTag = (tag: string): void => {
+  detailClientTag.value = tag;
+  showClientTagSuggestions.value = false;
+  saveDetails();
 };
 
 const onContentInput = (): void => {
@@ -273,18 +304,34 @@ const createdLabel = computed(() => {
               aria-label="Due date"
               @change="saveDetails"
             />
-            <input
-              v-model="detailClientTag"
-              type="text"
-              list="detail-client-tags"
-              placeholder="Client tag"
-              class="min-h-12 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-              aria-label="Client tag"
-              @change="saveDetails"
-            />
-            <datalist id="detail-client-tags">
-              <option v-for="tag in clientTags" :key="tag" :value="tag" />
-            </datalist>
+            <div class="relative">
+              <input
+                v-model="detailClientTag"
+                type="text"
+                placeholder="Client tag"
+                class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+                aria-label="Client tag"
+                @focus="onClientTagFocus"
+                @blur="onClientTagBlur"
+                @input="onClientTagInput"
+                @change="saveDetails"
+              />
+              <div
+                v-if="showClientTagSuggestions && filteredClientTags.length"
+                class="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+              >
+                <button
+                  v-for="tag in filteredClientTags"
+                  :key="tag"
+                  type="button"
+                  class="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                  :class="{ 'bg-blue-50 text-blue-700': detailClientTag === tag }"
+                  @mousedown.prevent="selectClientTag(tag)"
+                >
+                  {{ tag }}
+                </button>
+              </div>
+            </div>
             <input
               v-model="detailLink"
               type="url"
