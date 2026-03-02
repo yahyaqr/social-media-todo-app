@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
+import { Swiper, SwiperSlide } from 'swiper/vue';
 import type { StageId, Todo } from '../data/stages';
 
 type TaskUpdates = {
@@ -52,7 +53,7 @@ const showClientTagSuggestions = ref(false);
 const linkPasteHoldTimer = ref<number | null>(null);
 const linkPasteLongPressTriggered = ref(false);
 const activeLinkIndex = ref(0);
-const carouselTouchStartX = ref<number | null>(null);
+const linkSwiper = ref<any>(null);
 
 const formatDateInput = (timestamp?: number): string => {
   if (!timestamp) {
@@ -143,6 +144,9 @@ watch(
     detailClientTag.value = todo.clientTag ?? '';
     detailLinks.value = [...(todo.links ?? [])];
     activeLinkIndex.value = 0;
+    void nextTick(() => {
+      linkSwiper.value?.slideTo(0, 0);
+    });
     detailLinkInput.value = '';
     detailContent.value = todo.content ?? '';
     showContentPreview.value = false;
@@ -207,6 +211,9 @@ const appendDetailLink = (): void => {
 
   detailLinks.value = [...detailLinks.value, trimmed];
   activeLinkIndex.value = detailLinks.value.length - 1;
+  void nextTick(() => {
+    linkSwiper.value?.slideTo(activeLinkIndex.value, 0);
+  });
   detailLinkInput.value = '';
   saveDetails();
 };
@@ -279,6 +286,9 @@ const removeDetailLink = (index: number): void => {
   } else if (activeLinkIndex.value >= detailLinks.value.length) {
     activeLinkIndex.value = detailLinks.value.length - 1;
   }
+  void nextTick(() => {
+    linkSwiper.value?.slideTo(activeLinkIndex.value, 0);
+  });
   saveDetails();
 };
 
@@ -303,49 +313,30 @@ const goToPreviousLink = (): void => {
   if (!canGoToPreviousLink.value) {
     return;
   }
-  activeLinkIndex.value -= 1;
+  linkSwiper.value?.slidePrev();
 };
 
 const goToNextLink = (): void => {
   if (!canGoToNextLink.value) {
     return;
   }
-  activeLinkIndex.value += 1;
+  linkSwiper.value?.slideNext();
 };
 
 const goToLinkAt = (index: number): void => {
   if (index < 0 || index >= detailLinks.value.length) {
     return;
   }
-  activeLinkIndex.value = index;
+  linkSwiper.value?.slideTo(index);
 };
 
-const onCarouselTouchStart = (event: TouchEvent): void => {
-  if (!event.touches.length) {
-    return;
-  }
-  carouselTouchStartX.value = event.touches[0].clientX;
+const onLinkSwiperInit = (swiper: any): void => {
+  linkSwiper.value = swiper;
+  activeLinkIndex.value = swiper.activeIndex ?? 0;
 };
 
-const onCarouselTouchEnd = (event: TouchEvent): void => {
-  if (carouselTouchStartX.value === null || !event.changedTouches.length) {
-    carouselTouchStartX.value = null;
-    return;
-  }
-
-  const deltaX = event.changedTouches[0].clientX - carouselTouchStartX.value;
-  carouselTouchStartX.value = null;
-
-  if (Math.abs(deltaX) < 40) {
-    return;
-  }
-
-  if (deltaX > 0) {
-    goToPreviousLink();
-    return;
-  }
-
-  goToNextLink();
+const onLinkSwiperSlideChange = (swiper: any): void => {
+  activeLinkIndex.value = swiper.activeIndex ?? 0;
 };
 
 const confirmDelete = (): void => {
@@ -597,55 +588,63 @@ const createdLabel = computed(() => {
               </div>
 
               <div v-if="activeLink" class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                <div
-                  class="relative rounded-lg border border-slate-200 bg-white p-2"
-                  @touchstart="onCarouselTouchStart"
-                  @touchend="onCarouselTouchEnd"
-                >
-                  <div class="mb-2 flex items-center justify-between gap-2 text-xs text-slate-700">
-                    <a
-                      :href="activeLink.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="truncate text-blue-700 hover:underline"
-                    >
-                      {{ activeLink.url }}
-                    </a>
-                    <button
-                      type="button"
-                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                      aria-label="Remove link"
-                      title="Remove link"
-                      @click="removeDetailLink(activeLink.index)"
-                    >
-                      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6L6 18" />
-                        <path d="M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <iframe
-                    v-if="activeLink.embedUrl"
-                    :src="activeLink.embedUrl"
-                    class="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
-                    loading="lazy"
-                    scrolling="no"
-                    frameborder="0"
-                    allowfullscreen
-                    title="Instagram preview"
-                  />
-                  <div
-                    v-else
-                    class="flex h-28 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500"
+                <div class="relative rounded-lg border border-slate-200 bg-white p-2">
+                  <Swiper
+                    class="link-preview-swiper"
+                    :slides-per-view="1"
+                    :space-between="8"
+                    :allow-touch-move="detailLinks.length > 1"
+                    :nested="true"
+                    @swiper="onLinkSwiperInit"
+                    @slideChange="onLinkSwiperSlideChange"
                   >
-                    Preview available for Instagram post links.
-                  </div>
+                    <SwiperSlide v-for="(item, index) in detailLinks" :key="`${item}-${index}`">
+                      <div class="mb-2 flex items-center justify-between gap-2 text-xs text-slate-700">
+                        <a
+                          :href="item"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="truncate text-blue-700 hover:underline"
+                        >
+                          {{ item }}
+                        </a>
+                        <button
+                          type="button"
+                          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                          aria-label="Remove link"
+                          title="Remove link"
+                          @click="removeDetailLink(index)"
+                        >
+                          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18" />
+                            <path d="M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <iframe
+                        v-if="getInstagramEmbedUrl(item)"
+                        :src="getInstagramEmbedUrl(item) as string"
+                        class="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
+                        loading="lazy"
+                        scrolling="no"
+                        frameborder="0"
+                        allowfullscreen
+                        title="Instagram preview"
+                      />
+                      <div
+                        v-else
+                        class="flex h-28 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500"
+                      >
+                        Preview available for Instagram post links.
+                      </div>
+                    </SwiperSlide>
+                  </Swiper>
 
                   <button
                     v-if="detailLinks.length > 1"
                     type="button"
-                    class="absolute left-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    class="absolute left-2 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Previous link"
                     :disabled="!canGoToPreviousLink"
                     @click="goToPreviousLink"
@@ -657,7 +656,7 @@ const createdLabel = computed(() => {
                   <button
                     v-if="detailLinks.length > 1"
                     type="button"
-                    class="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    class="absolute right-2 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Next link"
                     :disabled="!canGoToNextLink"
                     @click="goToNextLink"
@@ -674,7 +673,7 @@ const createdLabel = computed(() => {
                     :key="`link-indicator-${index}`"
                     type="button"
                     class="h-1.5 rounded-full transition-all"
-                    :class="index === activeLink.index ? 'w-4 bg-slate-700' : 'w-1.5 bg-slate-300 hover:bg-slate-400'"
+                    :class="index === activeLinkIndex ? 'w-4 bg-slate-700' : 'w-1.5 bg-slate-300 hover:bg-slate-400'"
                     :aria-label="`Go to link ${index + 1}`"
                     @click="goToLinkAt(index)"
                   />
@@ -757,7 +756,7 @@ const createdLabel = computed(() => {
               v-model="detailContent"
               rows="12"
               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-              placeholder="Write notes. Start a line with - or * for bullets. Use **bold** or Ctrl/Cmd+B."
+              placeholder="Write notes. Use - [ ] for checkbox, @name for mention, #topic for tag, - for bullets, and **bold** or Ctrl/Cmd+B."
               @input="onContentInput"
               @keydown="onContentKeydown"
               @blur="saveDetails"
