@@ -212,37 +212,45 @@ const splitBoldSegments = (text: string): ContentSegment[] => {
   });
 };
 
+const hydrateFromTodo = (todo: Todo): void => {
+  detailTitle.value = todo.text;
+  detailDueDate.value = formatDateInput(todo.dueAt);
+  detailClientTag.value = todo.clientTag ?? '';
+  detailLinks.value = [...(todo.links ?? [])];
+  detailLinkCaptions.value = Array.from({ length: detailLinks.value.length }, (_, index) => {
+    const value = todo.linkCaptions?.[index];
+    return typeof value === 'string' ? value : '';
+  });
+  activeLinkIndex.value = 0;
+  void nextTick(() => {
+    linkSwiper.value?.slideTo(0, 0);
+  });
+  detailLinkInput.value = '';
+  detailContent.value = todo.content ?? '';
+  showContentPreview.value = false;
+  showClientTagSuggestions.value = false;
+  void nextTick(() => {
+    resizeDetailContentTextarea();
+    for (const textarea of Object.values(linkCaptionTextareaRefs.value)) {
+      if (textarea) {
+        autoResizeTextarea(textarea);
+      }
+    }
+  });
+};
+
 watch(
-  () => props.todo,
-  (todo) => {
-    if (!todo) {
+  [() => props.visible, () => props.todo?.id],
+  ([visible, id], [previousVisible, previousId]) => {
+    if (!visible || !id || !props.todo) {
       return;
     }
 
-    detailTitle.value = todo.text;
-    detailDueDate.value = formatDateInput(todo.dueAt);
-    detailClientTag.value = todo.clientTag ?? '';
-    detailLinks.value = [...(todo.links ?? [])];
-    detailLinkCaptions.value = Array.from({ length: detailLinks.value.length }, (_, index) => {
-      const value = todo.linkCaptions?.[index];
-      return typeof value === 'string' ? value : '';
-    });
-    activeLinkIndex.value = 0;
-    void nextTick(() => {
-      linkSwiper.value?.slideTo(0, 0);
-    });
-    detailLinkInput.value = '';
-    detailContent.value = todo.content ?? '';
-    showContentPreview.value = false;
-    showClientTagSuggestions.value = false;
-    void nextTick(() => {
-      resizeDetailContentTextarea();
-      for (const textarea of Object.values(linkCaptionTextareaRefs.value)) {
-        if (textarea) {
-          autoResizeTextarea(textarea);
-        }
-      }
-    });
+    const openedNow = !previousVisible && visible;
+    const switchedTodo = id !== previousId;
+    if (openedNow || switchedTodo) {
+      hydrateFromTodo(props.todo);
+    }
   },
   { immediate: true }
 );
