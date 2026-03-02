@@ -503,7 +503,10 @@ const createdLabel = computed(() => {
           </svg>
         </button>
 
-        <div class="flex items-center gap-1.5 sm:gap-2">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <p class="text-[11px] font-medium text-slate-500 sm:text-xs">
+            Created {{ createdLabel }}
+          </p>
           <button
             type="button"
             class="inline-flex h-9 items-center gap-2 rounded-full px-3 text-xs font-semibold transition sm:text-sm"
@@ -707,10 +710,6 @@ const createdLabel = computed(() => {
                 </div>
               </div>
             </div>
-          </div>
-
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            Created {{ createdLabel }}
           </div>
 
           <div class="mt-5">
