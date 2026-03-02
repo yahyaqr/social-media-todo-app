@@ -9,6 +9,8 @@ import TaskDetailSheet from './TaskDetailSheet.vue';
 import TodoItem from './TodoItem.vue';
 
 type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
+const ALL_CLIENT_TAGS = '__all_client_tags__';
+const UNTAGGED_CLIENT_TAG = '__untagged_client_tag__';
 
 const props = defineProps<{
   stageId: StageId;
@@ -41,13 +43,19 @@ const getNextStageDate = (stageId: StageId): string => {
 };
 
 const filter = ref<FilterMode>('all');
+const clientTagFilter = ref<string>(ALL_CLIENT_TAGS);
 const filterOptions: Array<{ value: FilterMode; label: string }> = [
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'All status' },
   { value: 'today', label: 'Today' },
   { value: 'upcoming', label: 'Upcoming' },
   { value: 'overdue', label: 'Overdue' },
   { value: 'completed', label: 'Completed' }
 ];
+const clientTagFilterOptions = computed<Array<{ value: string; label: string }>>(() => [
+  { value: ALL_CLIENT_TAGS, label: 'All clients' },
+  { value: UNTAGGED_CLIENT_TAG, label: 'No client tag' },
+  ...store.clientTags.map((tag) => ({ value: tag, label: tag }))
+]);
 
 const draggingTodoId = ref<string | null>(null);
 const isAddTaskSheetOpen = ref(false);
@@ -81,23 +89,46 @@ const filteredTodos = computed(() => {
   });
 
   if (filter.value === 'today') {
-    return list.filter((todo) => !todo.done && todo.dueAt !== undefined && todo.dueAt >= start && todo.dueAt < end);
+    return list.filter(
+      (todo) =>
+        !todo.done &&
+        todo.dueAt !== undefined &&
+        todo.dueAt >= start &&
+        todo.dueAt < end &&
+        matchesClientTagFilter(todo)
+    );
   }
 
   if (filter.value === 'upcoming') {
-    return list.filter((todo) => !todo.done && todo.dueAt !== undefined && todo.dueAt >= end);
+    return list.filter(
+      (todo) => !todo.done && todo.dueAt !== undefined && todo.dueAt >= end && matchesClientTagFilter(todo)
+    );
   }
 
   if (filter.value === 'overdue') {
-    return list.filter((todo) => todo.dueAt !== undefined && todo.dueAt < start && !todo.done);
+    return list.filter(
+      (todo) => todo.dueAt !== undefined && todo.dueAt < start && !todo.done && matchesClientTagFilter(todo)
+    );
   }
 
   if (filter.value === 'completed') {
-    return list.filter((todo) => todo.done);
+    return list.filter((todo) => todo.done && matchesClientTagFilter(todo));
   }
 
-  return list.filter((todo) => !todo.done);
+  return list.filter((todo) => !todo.done && matchesClientTagFilter(todo));
 });
+
+const matchesClientTagFilter = (todo: Todo): boolean => {
+  if (clientTagFilter.value === ALL_CLIENT_TAGS) {
+    return true;
+  }
+
+  if (clientTagFilter.value === UNTAGGED_CLIENT_TAG) {
+    return !todo.clientTag?.trim();
+  }
+
+  return (todo.clientTag ?? '').trim() === clientTagFilter.value;
+};
 
 const parseDate = (value: string): number | undefined => {
   if (!value) {
@@ -225,7 +256,10 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       @submit="submitFromSheet"
     />
 
-    <BasicDropdown v-model="filter" :options="filterOptions" label="Filter" />
+    <div class="flex gap-2">
+      <BasicDropdown class="w-1/2" v-model="filter" :options="filterOptions" label="Filter" />
+      <BasicDropdown class="w-1/2" v-model="clientTagFilter" :options="clientTagFilterOptions" label="Client Tag" />
+    </div>
 
     <ul v-if="filteredTodos.length" class="mt-3 space-y-3">
       <TodoItem
