@@ -73,6 +73,20 @@ const timingClass = computed(() => {
 const linkList = computed(() => props.todo.links ?? []);
 const primaryLink = computed(() => linkList.value[0]);
 const extraLinkCount = computed(() => Math.max(0, linkList.value.length - 1));
+const titleWithClientTag = computed(() => {
+  const tag = props.todo.clientTag?.trim();
+  const text = props.todo.text;
+  if (!tag) {
+    return { prefix: '', text };
+  }
+
+  const prefix = `${tag}:`;
+  if (text.trimStart().toLowerCase().startsWith(prefix.toLowerCase())) {
+    return { prefix, text };
+  }
+
+  return { prefix, text };
+});
 const inlineTags = computed(() => {
   const source = `${props.todo.text}\n${props.todo.content ?? ''}`;
   const matches = source.match(/@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+/g) ?? [];
@@ -109,10 +123,12 @@ const selectClientTag = (tag: string): void => {
 
     <div class="min-w-0 flex-1">
       <p
-        class="line-clamp-2 text-sm font-medium leading-5 text-slate-800 sm:text-[0.95rem]"
+        class="line-clamp-2 text-sm font-normal leading-5 text-slate-800 sm:text-[0.95rem"
         :class="{ 'text-slate-400 line-through': todo.done }"
       >
-        {{ todo.text }}
+        <span v-if="titleWithClientTag.prefix" class="font-semibold mr-1">{{ titleWithClientTag.prefix }}</span>
+        <span v-if="titleWithClientTag.prefix"> {{ titleWithClientTag.text }}</span>
+        <span v-else>{{ titleWithClientTag.text }}</span>
       </p>
       <div
         v-if="dueLabel || todo.clientTag || linkList.length || inlineTags.length"
