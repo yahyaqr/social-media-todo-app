@@ -17,6 +17,7 @@ type ContentSegment = {
   text: string;
   bold: boolean;
   tagType?: 'mention' | 'topic';
+  linkUrl?: string;
 };
 
 type ContentLine = {
@@ -124,11 +125,68 @@ const splitBoldSegments = (text: string): ContentSegment[] => {
     return segments;
   };
 
+  const splitTagAndUrlSegments = (value: string, bold: boolean): ContentSegment[] => {
+    const segments: ContentSegment[] = [];
+    const urlPattern = /(https?:\/\/[^\s)]+)/g;
+    let lastIndex = 0;
+
+    for (const match of value.matchAll(urlPattern)) {
+      const index = match.index ?? 0;
+      if (index > lastIndex) {
+        segments.push(...splitTagSegments(value.slice(lastIndex, index), bold));
+      }
+
+      const url = match[0];
+      segments.push({
+        text: url,
+        bold,
+        linkUrl: url
+      });
+
+      lastIndex = index + url.length;
+    }
+
+    if (lastIndex < value.length) {
+      segments.push(...splitTagSegments(value.slice(lastIndex), bold));
+    }
+
+    return segments;
+  };
+
+  const splitMarkdownLinkSegments = (value: string, bold: boolean): ContentSegment[] => {
+    const segments: ContentSegment[] = [];
+    const markdownLinkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    let lastIndex = 0;
+
+    for (const match of value.matchAll(markdownLinkPattern)) {
+      const index = match.index ?? 0;
+      if (index > lastIndex) {
+        segments.push(...splitTagAndUrlSegments(value.slice(lastIndex, index), bold));
+      }
+
+      const label = match[1];
+      const url = match[2];
+      segments.push({
+        text: label,
+        bold,
+        linkUrl: url
+      });
+
+      lastIndex = index + match[0].length;
+    }
+
+    if (lastIndex < value.length) {
+      segments.push(...splitTagAndUrlSegments(value.slice(lastIndex), bold));
+    }
+
+    return segments;
+  };
+
   const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return parts.flatMap((part) => {
     const isBold = /^\*\*[^*]+\*\*$/.test(part);
     const normalized = isBold ? part.slice(2, -2) : part;
-    return splitTagSegments(normalized, isBold);
+    return splitMarkdownLinkSegments(normalized, isBold);
   });
 };
 
@@ -415,6 +473,32 @@ const insertCheckboxAtCaret = (): void => {
     const cursor = start + prefix.length;
     input.focus();
     input.setSelectionRange(cursor, cursor);
+  });
+
+  saveDetails();
+};
+
+const insertInlineLinkAtCaret = (): void => {
+  const input = detailContentInput.value;
+  if (!input) {
+    return;
+  }
+
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const selected = detailContent.value.slice(start, end).trim();
+  const label = selected || 'link';
+  const snippet = `[${label}](https://)`;
+
+  const before = detailContent.value.slice(0, start);
+  const after = detailContent.value.slice(end);
+  detailContent.value = `${before}${snippet}${after}`;
+
+  void nextTick(() => {
+    const urlStart = start + label.length + 3;
+    const urlEnd = urlStart + 8;
+    input.focus();
+    input.setSelectionRange(urlStart, urlEnd);
   });
 
   saveDetails();
@@ -729,6 +813,18 @@ const createdLabel = computed(() => {
                 <button
                   type="button"
                   class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+                  title="Insert link"
+                  aria-label="Insert link"
+                  @click="insertInlineLinkAtCaret"
+                >
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 13a5 5 0 007.1 0l2.1-2.1a5 5 0 00-7.1-7.1L10 6" />
+                    <path d="M14 11a5 5 0 00-7.1 0L4.8 13.1a5 5 0 007.1 7.1L14 18" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
                   title="Insert checkbox"
                   aria-label="Insert checkbox"
                   @click="insertCheckboxAtCaret"
@@ -764,7 +860,7 @@ const createdLabel = computed(() => {
               v-model="detailContent"
               rows="12"
               class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-              placeholder="Write notes. Use - [ ] for checkbox, @name for mention, #topic for tag, - for bullets, and **bold** or Ctrl/Cmd+B."
+              placeholder="Write notes. Use - [ ] checkbox, @name mention, #topic tag, [label](https://...) link, - bullets, and **bold** or Ctrl/Cmd+B."
               @input="onContentInput"
               @keydown="onContentKeydown"
               @blur="saveDetails"
@@ -795,8 +891,18 @@ const createdLabel = computed(() => {
                   </span>
                   <span :class="{ 'text-slate-500 line-through': line.kind === 'checkbox' && line.checked }">
                     <template v-for="(segment, segmentIndex) in line.segments" :key="`${index}-${segmentIndex}`">
+                      <a
+                        v-if="segment.linkUrl"
+                        :href="segment.linkUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-800"
+                        :class="{ 'font-semibold': segment.bold }"
+                      >
+                        {{ segment.text }}
+                      </a>
                       <strong
-                        v-if="segment.bold"
+                        v-else-if="segment.bold"
                         :class="{
                           'rounded bg-sky-100 px-1 py-0.5 text-sky-700': segment.tagType === 'mention',
                           'rounded bg-emerald-100 px-1 py-0.5 text-emerald-700': segment.tagType === 'topic'
