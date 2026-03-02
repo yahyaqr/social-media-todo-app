@@ -18,6 +18,8 @@ const clientTag = ref('');
 const links = ref<string[]>([]);
 const newLink = ref('');
 const showClientTagSuggestions = ref(false);
+const linkPasteHoldTimer = ref<number | null>(null);
+const linkPasteLongPressTriggered = ref(false);
 
 watch(
   () => props.visible,
@@ -53,6 +55,46 @@ const appendLink = (): void => {
 
   links.value = [...links.value, trimmed];
   newLink.value = '';
+};
+
+const pasteLinkFromClipboard = async (): Promise<void> => {
+  if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+    return;
+  }
+
+  try {
+    const clipboardText = (await navigator.clipboard.readText()).trim();
+    if (clipboardText) {
+      newLink.value = clipboardText;
+    }
+  } catch {
+    // Ignore clipboard permission/runtime errors.
+  }
+};
+
+const clearLinkPasteHoldTimer = (): void => {
+  if (linkPasteHoldTimer.value !== null) {
+    window.clearTimeout(linkPasteHoldTimer.value);
+    linkPasteHoldTimer.value = null;
+  }
+};
+
+const startLinkPasteHold = (): void => {
+  clearLinkPasteHoldTimer();
+  linkPasteLongPressTriggered.value = false;
+  linkPasteHoldTimer.value = window.setTimeout(() => {
+    linkPasteLongPressTriggered.value = true;
+    void pasteLinkFromClipboard();
+  }, 500);
+};
+
+const handleAddLinkButtonClick = (): void => {
+  if (linkPasteLongPressTriggered.value) {
+    linkPasteLongPressTriggered.value = false;
+    return;
+  }
+
+  appendLink();
 };
 
 const removeLink = (index: number): void => {
@@ -188,7 +230,13 @@ const selectClientTag = (tag: string): void => {
               class="inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl border border-slate-300 px-3 text-slate-700 hover:bg-slate-100"
               aria-label="Add link"
               title="Add link"
-              @click="appendLink"
+              @click="handleAddLinkButtonClick"
+              @mousedown="startLinkPasteHold"
+              @mouseup="clearLinkPasteHoldTimer"
+              @mouseleave="clearLinkPasteHoldTimer"
+              @touchstart="startLinkPasteHold"
+              @touchend="clearLinkPasteHoldTimer"
+              @touchcancel="clearLinkPasteHoldTimer"
             >
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5v14" />
