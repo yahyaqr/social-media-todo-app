@@ -14,10 +14,12 @@ type TaskUpdates = {
 type ContentSegment = {
   text: string;
   bold: boolean;
+  tagType?: 'mention' | 'topic';
 };
 
 type ContentLine = {
-  isBullet: boolean;
+  kind: 'paragraph' | 'bullet' | 'checkbox';
+  checked?: boolean;
   segments: ContentSegment[];
 };
 
@@ -85,13 +87,45 @@ const normalizeBulletLines = (value: string): string => {
 };
 
 const splitBoldSegments = (text: string): ContentSegment[] => {
+  const splitTagSegments = (value: string, bold: boolean): ContentSegment[] => {
+    const segments: ContentSegment[] = [];
+    const tagPattern = /(@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+)/g;
+    let lastIndex = 0;
+
+    for (const match of value.matchAll(tagPattern)) {
+      const index = match.index ?? 0;
+      if (index > lastIndex) {
+        segments.push({
+          text: value.slice(lastIndex, index),
+          bold
+        });
+      }
+
+      const tag = match[0];
+      segments.push({
+        text: tag,
+        bold,
+        tagType: tag.startsWith('@') ? 'mention' : 'topic'
+      });
+
+      lastIndex = index + tag.length;
+    }
+
+    if (lastIndex < value.length) {
+      segments.push({
+        text: value.slice(lastIndex),
+        bold
+      });
+    }
+
+    return segments;
+  };
+
   const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-  return parts.map((part) => {
+  return parts.flatMap((part) => {
     const isBold = /^\*\*[^*]+\*\*$/.test(part);
-    return {
-      text: isBold ? part.slice(2, -2) : part,
-      bold: isBold
-    };
+    const normalized = isBold ? part.slice(2, -2) : part;
+    return splitTagSegments(normalized, isBold);
   });
 };
 
@@ -215,6 +249,7 @@ const handleDetailAddLinkButtonClick = (): void => {
 
 const closeDetails = (): void => {
   appendDetailLink();
+  saveDetails();
   emit('close');
 };
 
@@ -240,8 +275,6 @@ const onContentInput = (): void => {
   if (normalized !== detailContent.value) {
     detailContent.value = normalized;
   }
-
-  saveDetails();
 };
 
 const wrapContentSelectionBold = (): void => {
@@ -291,6 +324,29 @@ const insertBulletAtCaret = (): void => {
   saveDetails();
 };
 
+const insertCheckboxAtCaret = (): void => {
+  const input = detailContentInput.value;
+  if (!input) {
+    return;
+  }
+
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const before = detailContent.value.slice(0, start);
+  const after = detailContent.value.slice(end);
+  const prefix = start === 0 || detailContent.value[start - 1] === '\n' ? '- [ ] ' : '\n- [ ] ';
+
+  detailContent.value = `${before}${prefix}${after}`;
+
+  void nextTick(() => {
+    const cursor = start + prefix.length;
+    input.focus();
+    input.setSelectionRange(cursor, cursor);
+  });
+
+  saveDetails();
+};
+
 const onContentKeydown = (event: KeyboardEvent): void => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
     event.preventDefault();
@@ -304,10 +360,20 @@ const contentPreview = computed<ContentLine[]>(() => {
   }
 
   return detailContent.value.split('\n').map((line) => {
+    const checkboxMatch = line.match(/^\s*-\s+\[( |x|X)\]\s+(.*)$/);
+    if (checkboxMatch) {
+      const checked = checkboxMatch[1].toLowerCase() === 'x';
+      return {
+        kind: 'checkbox',
+        checked,
+        segments: splitBoldSegments(checkboxMatch[2])
+      };
+    }
+
     const bulletMatch = line.match(/^\s*-\s+(.*)$/);
     const text = bulletMatch ? bulletMatch[1] : line;
     return {
-      isBullet: Boolean(bulletMatch),
+      kind: bulletMatch ? 'bullet' : 'paragraph',
       segments: splitBoldSegments(text)
     };
   });
@@ -505,6 +571,18 @@ const createdLabel = computed(() => {
                 <button
                   type="button"
                   class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+                  title="Insert checkbox"
+                  aria-label="Insert checkbox"
+                  @click="insertCheckboxAtCaret"
+                >
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                    <path d="M8 12l3 3 5-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
                   :aria-label="showContentPreview ? 'Hide preview' : 'Show preview'"
                   :title="showContentPreview ? 'Hide preview' : 'Show preview'"
                   @click="showContentPreview = !showContentPreview"
@@ -531,6 +609,7 @@ const createdLabel = computed(() => {
               placeholder="Write notes. Start a line with - or * for bullets. Use **bold** or Ctrl/Cmd+B."
               @input="onContentInput"
               @keydown="onContentKeydown"
+              @blur="saveDetails"
             />
 
             <div v-if="showContentPreview" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -540,13 +619,42 @@ const createdLabel = computed(() => {
                   v-for="(line, index) in contentPreview"
                   :key="index"
                   class="flex items-start gap-2"
-                  :class="{ 'pl-0': !line.isBullet }"
+                  :class="{ 'pl-0': line.kind === 'paragraph' }"
                 >
-                  <span v-if="line.isBullet" class="mt-[1px] text-slate-500">&bull;</span>
-                  <span>
+                  <span v-if="line.kind === 'bullet'" class="mt-[1px] text-slate-500">&bull;</span>
+                  <span
+                    v-if="line.kind === 'checkbox'"
+                    class="mt-[1px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border"
+                    :class="
+                      line.checked
+                        ? 'border-emerald-500 bg-emerald-500 text-white'
+                        : 'border-slate-400 bg-white text-transparent'
+                    "
+                  >
+                    <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <span :class="{ 'text-slate-500 line-through': line.kind === 'checkbox' && line.checked }">
                     <template v-for="(segment, segmentIndex) in line.segments" :key="`${index}-${segmentIndex}`">
-                      <strong v-if="segment.bold">{{ segment.text }}</strong>
-                      <span v-else>{{ segment.text }}</span>
+                      <strong
+                        v-if="segment.bold"
+                        :class="{
+                          'rounded bg-sky-100 px-1 py-0.5 text-sky-700': segment.tagType === 'mention',
+                          'rounded bg-emerald-100 px-1 py-0.5 text-emerald-700': segment.tagType === 'topic'
+                        }"
+                      >
+                        {{ segment.text }}
+                      </strong>
+                      <span
+                        v-else
+                        :class="{
+                          'rounded bg-sky-100 px-1 py-0.5 text-sky-700': segment.tagType === 'mention',
+                          'rounded bg-emerald-100 px-1 py-0.5 text-emerald-700': segment.tagType === 'topic'
+                        }"
+                      >
+                        {{ segment.text }}
+                      </span>
                     </template>
                   </span>
                 </div>
