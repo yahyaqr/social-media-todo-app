@@ -55,6 +55,28 @@ const showContentPreview = ref(false);
 const showClientTagSuggestions = ref(false);
 const activeLinkIndex = ref(0);
 const linkSwiper = ref<any>(null);
+const linkCaptionTextareaRefs = ref<Record<number, HTMLTextAreaElement | null>>({});
+
+const autoResizeTextarea = (textarea: HTMLTextAreaElement): void => {
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+};
+
+const resizeDetailContentTextarea = (): void => {
+  if (detailContentInput.value) {
+    autoResizeTextarea(detailContentInput.value);
+  }
+};
+
+const setLinkCaptionTextareaRef = (index: number, element: unknown): void => {
+  if (element instanceof HTMLTextAreaElement) {
+    linkCaptionTextareaRefs.value[index] = element;
+    autoResizeTextarea(element);
+    return;
+  }
+
+  delete linkCaptionTextareaRefs.value[index];
+};
 
 const formatDateInput = (timestamp?: number): string => {
   if (!timestamp) {
@@ -213,6 +235,14 @@ watch(
     detailContent.value = todo.content ?? '';
     showContentPreview.value = false;
     showClientTagSuggestions.value = false;
+    void nextTick(() => {
+      resizeDetailContentTextarea();
+      for (const textarea of Object.values(linkCaptionTextareaRefs.value)) {
+        if (textarea) {
+          autoResizeTextarea(textarea);
+        }
+      }
+    });
   },
   { immediate: true }
 );
@@ -342,6 +372,16 @@ const setDetailLinkCaption = (index: number, value: string): void => {
   detailLinkCaptions.value = next;
 };
 
+const onDetailLinkCaptionInput = (index: number, event: Event): void => {
+  const target = event.target;
+  if (!(target instanceof HTMLTextAreaElement)) {
+    return;
+  }
+
+  setDetailLinkCaption(index, target.value);
+  autoResizeTextarea(target);
+};
+
 const activeLink = computed(() => {
   if (!detailLinks.value.length) {
     return null;
@@ -402,9 +442,13 @@ const confirmDelete = (): void => {
 };
 
 const onContentInput = (): void => {
+  resizeDetailContentTextarea();
   const normalized = normalizeBulletLines(detailContent.value);
   if (normalized !== detailContent.value) {
     detailContent.value = normalized;
+    void nextTick(() => {
+      resizeDetailContentTextarea();
+    });
   }
 };
 
@@ -427,6 +471,7 @@ const wrapContentSelectionBold = (): void => {
     const focusEnd = selected ? end + 2 : start + 11;
     input.focus();
     input.setSelectionRange(focusStart, focusEnd);
+    resizeDetailContentTextarea();
   });
 
   saveDetails();
@@ -450,6 +495,7 @@ const insertBulletAtCaret = (): void => {
     const cursor = start + prefix.length;
     input.focus();
     input.setSelectionRange(cursor, cursor);
+    resizeDetailContentTextarea();
   });
 
   saveDetails();
@@ -473,6 +519,7 @@ const insertCheckboxAtCaret = (): void => {
     const cursor = start + prefix.length;
     input.focus();
     input.setSelectionRange(cursor, cursor);
+    resizeDetailContentTextarea();
   });
 
   saveDetails();
@@ -499,6 +546,7 @@ const insertInlineLinkAtCaret = (): void => {
     const urlEnd = urlStart + 8;
     input.focus();
     input.setSelectionRange(urlStart, urlEnd);
+    resizeDetailContentTextarea();
   });
 
   saveDetails();
@@ -726,12 +774,13 @@ const createdLabel = computed(() => {
                       >
                         Preview available for Instagram post links.
                       </div>
-                      <input
+                      <textarea
+                        :ref="(el) => setLinkCaptionTextareaRef(index, el)"
                         :value="detailLinkCaptions[index] ?? ''"
-                        type="text"
+                        rows="1"
                         placeholder="Add note..."
-                        class="mt-2 min-h-10 w-full rounded-lg border border-slate-100 bg-slate-100/90 px-3 py-2 text-xs text-slate-600 placeholder:text-slate-400 outline-none"
-                        @input="setDetailLinkCaption(index, ($event.target as HTMLInputElement).value)"
+                        class="mt-2 w-full resize-none overflow-hidden rounded-lg border border-slate-100 bg-slate-100/90 px-3 py-2 text-xs text-slate-600 placeholder:text-slate-400 outline-none"
+                        @input="onDetailLinkCaptionInput(index, $event)"
                         @blur="saveDetails"
                       />
                     </SwiperSlide>
@@ -859,7 +908,7 @@ const createdLabel = computed(() => {
               ref="detailContentInput"
               v-model="detailContent"
               rows="12"
-              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+              class="w-full resize-none overflow-hidden rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
               placeholder="Write notes. Use - [ ] checkbox, @name mention, #topic tag, [label](https://...) link, - bullets, and **bold** or Ctrl/Cmd+B."
               @input="onContentInput"
               @keydown="onContentKeydown"
