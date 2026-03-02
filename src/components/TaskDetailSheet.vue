@@ -51,6 +51,8 @@ const showContentPreview = ref(false);
 const showClientTagSuggestions = ref(false);
 const linkPasteHoldTimer = ref<number | null>(null);
 const linkPasteLongPressTriggered = ref(false);
+const activeLinkIndex = ref(0);
+const carouselTouchStartX = ref<number | null>(null);
 
 const formatDateInput = (timestamp?: number): string => {
   if (!timestamp) {
@@ -140,6 +142,7 @@ watch(
     detailDueDate.value = formatDateInput(todo.dueAt);
     detailClientTag.value = todo.clientTag ?? '';
     detailLinks.value = [...(todo.links ?? [])];
+    activeLinkIndex.value = 0;
     detailLinkInput.value = '';
     detailContent.value = todo.content ?? '';
     showContentPreview.value = false;
@@ -203,8 +206,24 @@ const appendDetailLink = (): void => {
   }
 
   detailLinks.value = [...detailLinks.value, trimmed];
+  activeLinkIndex.value = detailLinks.value.length - 1;
   detailLinkInput.value = '';
   saveDetails();
+};
+
+const getInstagramEmbedUrl = (link: string): string | null => {
+  const normalized = link.trim();
+  const match = normalized.match(
+    /^https?:\/\/(?:www\.)?instagram\.com\/(p|reel|tv)\/([A-Za-z0-9_-]+)(?:[/?#].*)?$/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const postType = match[1].toLowerCase();
+  const shortcode = match[2];
+  return `https://www.instagram.com/${postType}/${shortcode}/embed/?omitscript=true`;
 };
 
 const pasteLinkFromClipboard = async (): Promise<void> => {
@@ -255,7 +274,78 @@ const closeDetails = (): void => {
 
 const removeDetailLink = (index: number): void => {
   detailLinks.value = detailLinks.value.filter((_, current) => current !== index);
+  if (!detailLinks.value.length) {
+    activeLinkIndex.value = 0;
+  } else if (activeLinkIndex.value >= detailLinks.value.length) {
+    activeLinkIndex.value = detailLinks.value.length - 1;
+  }
   saveDetails();
+};
+
+const activeLink = computed(() => {
+  if (!detailLinks.value.length) {
+    return null;
+  }
+
+  const safeIndex = Math.min(activeLinkIndex.value, detailLinks.value.length - 1);
+  const url = detailLinks.value[safeIndex];
+  return {
+    index: safeIndex,
+    url,
+    embedUrl: getInstagramEmbedUrl(url)
+  };
+});
+
+const canGoToPreviousLink = computed(() => activeLinkIndex.value > 0);
+const canGoToNextLink = computed(() => activeLinkIndex.value < detailLinks.value.length - 1);
+
+const goToPreviousLink = (): void => {
+  if (!canGoToPreviousLink.value) {
+    return;
+  }
+  activeLinkIndex.value -= 1;
+};
+
+const goToNextLink = (): void => {
+  if (!canGoToNextLink.value) {
+    return;
+  }
+  activeLinkIndex.value += 1;
+};
+
+const goToLinkAt = (index: number): void => {
+  if (index < 0 || index >= detailLinks.value.length) {
+    return;
+  }
+  activeLinkIndex.value = index;
+};
+
+const onCarouselTouchStart = (event: TouchEvent): void => {
+  if (!event.touches.length) {
+    return;
+  }
+  carouselTouchStartX.value = event.touches[0].clientX;
+};
+
+const onCarouselTouchEnd = (event: TouchEvent): void => {
+  if (carouselTouchStartX.value === null || !event.changedTouches.length) {
+    carouselTouchStartX.value = null;
+    return;
+  }
+
+  const deltaX = event.changedTouches[0].clientX - carouselTouchStartX.value;
+  carouselTouchStartX.value = null;
+
+  if (Math.abs(deltaX) < 40) {
+    return;
+  }
+
+  if (deltaX > 0) {
+    goToPreviousLink();
+    return;
+  }
+
+  goToNextLink();
 };
 
 const confirmDelete = (): void => {
@@ -506,27 +596,88 @@ const createdLabel = computed(() => {
                 </button>
               </div>
 
-              <div v-if="detailLinks.length" class="space-y-1">
+              <div v-if="activeLink" class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
                 <div
-                  v-for="(item, index) in detailLinks"
-                  :key="`${item}-${index}`"
-                  class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"
+                  class="relative rounded-lg border border-slate-200 bg-white p-2"
+                  @touchstart="onCarouselTouchStart"
+                  @touchend="onCarouselTouchEnd"
                 >
-                  <a :href="item" target="_blank" rel="noopener noreferrer" class="truncate text-blue-700 hover:underline">
-                    {{ item }}
-                  </a>
+                  <div class="mb-2 flex items-center justify-between gap-2 text-xs text-slate-700">
+                    <a
+                      :href="activeLink.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="truncate text-blue-700 hover:underline"
+                    >
+                      {{ activeLink.url }}
+                    </a>
+                    <button
+                      type="button"
+                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="Remove link"
+                      title="Remove link"
+                      @click="removeDetailLink(activeLink.index)"
+                    >
+                      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18" />
+                        <path d="M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <iframe
+                    v-if="activeLink.embedUrl"
+                    :src="activeLink.embedUrl"
+                    class="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
+                    loading="lazy"
+                    scrolling="no"
+                    frameborder="0"
+                    allowfullscreen
+                    title="Instagram preview"
+                  />
+                  <div
+                    v-else
+                    class="flex h-28 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500"
+                  >
+                    Preview available for Instagram post links.
+                  </div>
+
                   <button
+                    v-if="detailLinks.length > 1"
                     type="button"
-                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-700"
-                    aria-label="Remove link"
-                    title="Remove link"
-                    @click="removeDetailLink(index)"
+                    class="absolute left-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Previous link"
+                    :disabled="!canGoToPreviousLink"
+                    @click="goToPreviousLink"
                   >
                     <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M18 6L6 18" />
-                      <path d="M6 6l12 12" />
+                      <path d="M15 18l-6-6 6-6" />
                     </svg>
                   </button>
+                  <button
+                    v-if="detailLinks.length > 1"
+                    type="button"
+                    class="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Next link"
+                    :disabled="!canGoToNextLink"
+                    @click="goToNextLink"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div v-if="detailLinks.length > 1" class="flex items-center justify-center gap-1.5 pb-1">
+                  <button
+                    v-for="(_, index) in detailLinks"
+                    :key="`link-indicator-${index}`"
+                    type="button"
+                    class="h-1.5 rounded-full transition-all"
+                    :class="index === activeLink.index ? 'w-4 bg-slate-700' : 'w-1.5 bg-slate-300 hover:bg-slate-400'"
+                    :aria-label="`Go to link ${index + 1}`"
+                    @click="goToLinkAt(index)"
+                  />
                 </div>
               </div>
             </div>
