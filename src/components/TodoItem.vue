@@ -13,6 +13,8 @@ const emit = defineEmits<{
   dragStart: [todoId: string];
   dragDrop: [targetId: string];
   openDetails: [todoId: string];
+  selectInlineTag: [tag: string];
+  selectClientTag: [tag: string];
 }>();
 
 const onDragStart = (): void => {
@@ -76,6 +78,14 @@ const inlineTags = computed(() => {
   const matches = source.match(/@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+/g) ?? [];
   return [...new Set(matches)];
 });
+
+const selectInlineTag = (tag: string): void => {
+  emit('selectInlineTag', tag);
+};
+
+const selectClientTag = (tag: string): void => {
+  emit('selectClientTag', tag);
+};
 </script>
 
 <template>
@@ -115,9 +125,14 @@ const inlineTags = computed(() => {
         >
           Due {{ dueLabel }}
         </span>
-        <span v-if="todo.clientTag" class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+        <button
+          v-if="todo.clientTag"
+          type="button"
+          class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 hover:bg-slate-200"
+          @click.stop="selectClientTag(todo.clientTag)"
+        >
           {{ todo.clientTag }}
-        </span>
+        </button>
         <a
           v-if="primaryLink"
           :href="primaryLink"
@@ -131,14 +146,16 @@ const inlineTags = computed(() => {
         <span v-if="extraLinkCount" class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
           +{{ extraLinkCount }} more
         </span>
-        <span
+        <button
           v-for="(tag, index) in inlineTags"
           :key="`${tag}-${index}`"
+          type="button"
           class="rounded-full px-2 py-0.5"
           :class="tag.startsWith('@') ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'"
+          @click.stop="selectInlineTag(tag)"
         >
           {{ tag }}
-        </span>
+        </button>
       </div>
     </div>
   </li>

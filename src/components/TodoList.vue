@@ -44,6 +44,7 @@ const getNextStageDate = (stageId: StageId): string => {
 
 const filter = ref<FilterMode>('all');
 const clientTagFilter = ref<string>(ALL_CLIENT_TAGS);
+const inlineTagFilter = ref<string | null>(null);
 const filterOptions: Array<{ value: FilterMode; label: string }> = [
   { value: 'all', label: 'All status' },
   { value: 'today', label: 'Today' },
@@ -75,6 +76,12 @@ const dayBoundaries = () => {
   return { start, end };
 };
 
+const extractInlineTags = (todo: Todo): string[] => {
+  const source = `${todo.text}\n${todo.content ?? ''}`;
+  const matches = source.match(/@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+/g) ?? [];
+  return [...new Set(matches)];
+};
+
 const filteredTodos = computed(() => {
   const { start, end } = dayBoundaries();
   const list = [...todos.value];
@@ -95,27 +102,38 @@ const filteredTodos = computed(() => {
         todo.dueAt !== undefined &&
         todo.dueAt >= start &&
         todo.dueAt < end &&
-        matchesClientTagFilter(todo)
+        matchesClientTagFilter(todo) &&
+        matchesInlineTagFilter(todo)
     );
   }
 
   if (filter.value === 'upcoming') {
     return list.filter(
-      (todo) => !todo.done && todo.dueAt !== undefined && todo.dueAt >= end && matchesClientTagFilter(todo)
+      (todo) =>
+        !todo.done &&
+        todo.dueAt !== undefined &&
+        todo.dueAt >= end &&
+        matchesClientTagFilter(todo) &&
+        matchesInlineTagFilter(todo)
     );
   }
 
   if (filter.value === 'overdue') {
     return list.filter(
-      (todo) => todo.dueAt !== undefined && todo.dueAt < start && !todo.done && matchesClientTagFilter(todo)
+      (todo) =>
+        todo.dueAt !== undefined &&
+        todo.dueAt < start &&
+        !todo.done &&
+        matchesClientTagFilter(todo) &&
+        matchesInlineTagFilter(todo)
     );
   }
 
   if (filter.value === 'completed') {
-    return list.filter((todo) => todo.done && matchesClientTagFilter(todo));
+    return list.filter((todo) => todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo));
   }
 
-  return list.filter((todo) => !todo.done && matchesClientTagFilter(todo));
+  return list.filter((todo) => !todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo));
 });
 
 const matchesClientTagFilter = (todo: Todo): boolean => {
@@ -128,6 +146,14 @@ const matchesClientTagFilter = (todo: Todo): boolean => {
   }
 
   return (todo.clientTag ?? '').trim() === clientTagFilter.value;
+};
+
+const matchesInlineTagFilter = (todo: Todo): boolean => {
+  if (!inlineTagFilter.value) {
+    return true;
+  }
+
+  return extractInlineTags(todo).includes(inlineTagFilter.value);
 };
 
 const parseDate = (value: string): number | undefined => {
@@ -184,6 +210,20 @@ const openDetails = (todoId: string): void => {
 
 const closeDetails = (): void => {
   selectedTodoId.value = null;
+};
+
+const setInlineTagFilter = (tag: string): void => {
+  inlineTagFilter.value = tag;
+};
+
+const clearInlineTagFilter = (): void => {
+  inlineTagFilter.value = null;
+};
+
+const isMentionInlineTagFilter = computed(() => inlineTagFilter.value?.startsWith('@') ?? false);
+
+const setClientTagFilter = (tag: string): void => {
+  clientTagFilter.value = tag;
 };
 
 const deleteSelectedTodo = (): void => {
@@ -260,6 +300,30 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       <BasicDropdown class="w-1/2" v-model="filter" :options="filterOptions" label="Filter" />
       <BasicDropdown class="w-1/2" v-model="clientTagFilter" :options="clientTagFilterOptions" label="Client Tag" />
     </div>
+    <div
+      v-if="inlineTagFilter"
+      class="mt-2 inline-flex min-h-11 w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-medium"
+      :class="
+        isMentionInlineTagFilter
+          ? 'border-sky-200 bg-sky-50 text-sky-800'
+          : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      "
+    >
+      <span class="truncate">Filtering by {{ inlineTagFilter }}</span>
+      <button
+        type="button"
+        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+        :class="isMentionInlineTagFilter ? 'text-sky-700 hover:bg-sky-100' : 'text-emerald-700 hover:bg-emerald-100'"
+        aria-label="Clear tag filter"
+        title="Clear filter"
+        @click="clearInlineTagFilter"
+      >
+        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18" />
+          <path d="M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
 
     <ul v-if="filteredTodos.length" class="mt-3 space-y-3">
       <TodoItem
@@ -272,6 +336,8 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         @drag-start="onDragStart"
         @drag-drop="onDragDrop"
         @open-details="openDetails"
+        @select-inline-tag="setInlineTagFilter"
+        @select-client-tag="setClientTagFilter"
       />
     </ul>
 
