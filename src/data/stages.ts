@@ -15,6 +15,7 @@ export type Todo = {
   dueAt?: number;
   clientTag?: string;
   links?: string[];
+  linkCaptions?: string[];
   content?: string;
 };
 

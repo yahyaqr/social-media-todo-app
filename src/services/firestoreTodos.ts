@@ -28,6 +28,7 @@ type TodoDoc = {
   dueAt?: number;
   clientTag?: string;
   links?: string[];
+  linkCaptions?: string[];
   content?: string;
 };
 
@@ -88,6 +89,9 @@ const toTodo = (id: string, data: TodoDoc): CloudTodo | null => {
     links: Array.isArray(data.links)
       ? data.links.filter((link): link is string => typeof link === 'string' && link.trim().length > 0)
       : undefined,
+    linkCaptions: Array.isArray(data.linkCaptions)
+      ? data.linkCaptions.map((caption) => (typeof caption === 'string' ? caption : ''))
+      : undefined,
     content: typeof data.content === 'string' ? data.content : undefined,
     stageId: stageId as StageId,
     order: typeof data.order === 'number' && Number.isFinite(data.order) ? data.order : Number.MAX_SAFE_INTEGER
@@ -101,6 +105,10 @@ const serializeTodo = (todo: Todo, stageId: StageId, order: number) => ({
   dueAt: typeof todo.dueAt === 'number' ? todo.dueAt : deleteField(),
   clientTag: todo.clientTag ?? deleteField(),
   links: todo.links && todo.links.length ? todo.links : deleteField(),
+  linkCaptions:
+    todo.linkCaptions && todo.linkCaptions.length && todo.linkCaptions.some((caption) => caption.trim().length > 0)
+      ? todo.linkCaptions
+      : deleteField(),
   content: todo.content ?? deleteField(),
   stageId,
   order,

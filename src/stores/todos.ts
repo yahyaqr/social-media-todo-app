@@ -57,6 +57,19 @@ const normalizeLinks = (values: string[] = []): string[] | undefined => {
   return normalizedList.length ? normalizedList : undefined;
 };
 
+const normalizeLinkCaptions = (values: string[] = [], linkCount = values.length): string[] | undefined => {
+  if (linkCount <= 0) {
+    return undefined;
+  }
+
+  const normalized = Array.from({ length: linkCount }, (_, index) => {
+    const value = values[index];
+    return typeof value === 'string' ? value.trim() : '';
+  });
+
+  return normalized.some(Boolean) ? normalized : undefined;
+};
+
 const normalizeClientTag = (value?: string): string | undefined => {
   const trimmed = value?.trim();
   return trimmed || undefined;
@@ -124,6 +137,7 @@ export const useTodosStore = defineStore('todos', () => {
       nextTodosByStage[stage.id] = list.map((todo) => ({
         ...todo,
         links: normalizeLinks(todo.links ?? []),
+        linkCaptions: normalizeLinkCaptions(todo.linkCaptions ?? [], todo.links?.length ?? 0),
         clientTag: normalizeClientTag(todo.clientTag),
         content: normalizeContent(todo.content)
       }));
@@ -230,6 +244,7 @@ export const useTodosStore = defineStore('todos', () => {
       done?: boolean;
       clientTag?: string;
       links?: string[];
+      linkCaptions?: string[];
       content?: string;
     }
   ): void => {
@@ -257,6 +272,10 @@ export const useTodosStore = defineStore('todos', () => {
 
     if (Object.prototype.hasOwnProperty.call(updates, 'links')) {
       todo.links = normalizeLinks(updates.links ?? []);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'linkCaptions')) {
+      todo.linkCaptions = normalizeLinkCaptions(updates.linkCaptions ?? [], todo.links?.length ?? 0);
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, 'content')) {

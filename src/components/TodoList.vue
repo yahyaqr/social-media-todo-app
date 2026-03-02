@@ -263,6 +263,7 @@ const updateDetails = (updates: {
   done?: boolean;
   clientTag?: string;
   links?: string[];
+  linkCaptions?: string[];
   content?: string;
 }): void => {
   const todo = selectedTodo.value;

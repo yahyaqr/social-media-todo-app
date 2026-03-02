@@ -9,6 +9,7 @@ type TaskUpdates = {
   done?: boolean;
   clientTag?: string;
   links?: string[];
+  linkCaptions?: string[];
   content?: string;
 };
 
@@ -45,6 +46,7 @@ const detailTitle = ref('');
 const detailDueDate = ref('');
 const detailClientTag = ref('');
 const detailLinks = ref<string[]>([]);
+const detailLinkCaptions = ref<string[]>([]);
 const detailLinkInput = ref('');
 const detailContent = ref('');
 const detailContentInput = ref<HTMLTextAreaElement | null>(null);
@@ -143,6 +145,10 @@ watch(
     detailDueDate.value = formatDateInput(todo.dueAt);
     detailClientTag.value = todo.clientTag ?? '';
     detailLinks.value = [...(todo.links ?? [])];
+    detailLinkCaptions.value = Array.from({ length: detailLinks.value.length }, (_, index) => {
+      const value = todo.linkCaptions?.[index];
+      return typeof value === 'string' ? value : '';
+    });
     activeLinkIndex.value = 0;
     void nextTick(() => {
       linkSwiper.value?.slideTo(0, 0);
@@ -166,6 +172,7 @@ const saveDetails = (): void => {
     dueAt: parseDate(detailDueDate.value),
     clientTag: detailClientTag.value,
     links: detailLinks.value,
+    linkCaptions: detailLinkCaptions.value,
     content: normalizeBulletLines(detailContent.value)
   });
 };
@@ -210,6 +217,7 @@ const appendDetailLink = (): void => {
   }
 
   detailLinks.value = [...detailLinks.value, trimmed];
+  detailLinkCaptions.value = [...detailLinkCaptions.value, ''];
   activeLinkIndex.value = detailLinks.value.length - 1;
   void nextTick(() => {
     linkSwiper.value?.slideTo(activeLinkIndex.value, 0);
@@ -281,6 +289,7 @@ const closeDetails = (): void => {
 
 const removeDetailLink = (index: number): void => {
   detailLinks.value = detailLinks.value.filter((_, current) => current !== index);
+  detailLinkCaptions.value = detailLinkCaptions.value.filter((_, current) => current !== index);
   if (!detailLinks.value.length) {
     activeLinkIndex.value = 0;
   } else if (activeLinkIndex.value >= detailLinks.value.length) {
@@ -290,6 +299,16 @@ const removeDetailLink = (index: number): void => {
     linkSwiper.value?.slideTo(activeLinkIndex.value, 0);
   });
   saveDetails();
+};
+
+const setDetailLinkCaption = (index: number, value: string): void => {
+  if (index < 0 || index >= detailLinkCaptions.value.length) {
+    return;
+  }
+
+  const next = [...detailLinkCaptions.value];
+  next[index] = value;
+  detailLinkCaptions.value = next;
 };
 
 const activeLink = computed(() => {
@@ -638,6 +657,14 @@ const createdLabel = computed(() => {
                       >
                         Preview available for Instagram post links.
                       </div>
+                      <input
+                        :value="detailLinkCaptions[index] ?? ''"
+                        type="text"
+                        placeholder="Add note..."
+                        class="mt-2 min-h-10 w-full rounded-lg border border-slate-100 bg-slate-100/90 px-3 py-2 text-xs text-slate-600 placeholder:text-slate-400 outline-none"
+                        @input="setDetailLinkCaption(index, ($event.target as HTMLInputElement).value)"
+                        @blur="saveDetails"
+                      />
                     </SwiperSlide>
                   </Swiper>
 
