@@ -158,7 +158,7 @@ const selectClientTag = (tag: string): void => {
           />
           <div
             v-if="showClientTagSuggestions && filteredClientTags.length"
-            class="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+            class="suggestion-scrollbar absolute left-0 right-0 top-full z-30 mt-1 max-h-28 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
           >
             <button
               v-for="tag in filteredClientTags"
