@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { computed, ref } from 'vue';
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue';
 import { useTodosStore } from '../stores/todos';
 import { useAuthStore } from '../stores/auth';
 import { stages, type StageId, type Todo } from '../data/stages';
@@ -52,11 +52,7 @@ const filterOptions: Array<{ value: FilterMode; label: string }> = [
   { value: 'overdue', label: 'Overdue' },
   { value: 'completed', label: 'Completed' }
 ];
-const clientTagFilterOptions = computed<Array<{ value: string; label: string }>>(() => [
-  { value: ALL_CLIENT_TAGS, label: 'All clients' },
-  { value: UNTAGGED_CLIENT_TAG, label: 'No client tag' },
-  ...store.clientTags.map((tag) => ({ value: tag, label: tag }))
-]);
+
 
 const draggingTodoId = ref<string | null>(null);
 const isAddTaskSheetOpen = ref(false);
@@ -64,6 +60,21 @@ const selectedTodoId = ref<string | null>(null);
 const isProfileOpen = ref(false);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
+const stageClientTags = computed(() => {
+  const tags = new Set<string>();
+  for (const todo of todos.value) {
+    const tag = todo.clientTag?.trim();
+    if (tag) {
+      tags.add(tag);
+    }
+  }
+  return [...tags].sort((a, b) => a.localeCompare(b));
+});
+const clientTagFilterOptions = computed<Array<{ value: string; label: string }>>(() => [
+  { value: ALL_CLIENT_TAGS, label: 'All clients' },
+  { value: UNTAGGED_CLIENT_TAG, label: 'No client tag' },
+  ...stageClientTags.value.map((tag) => ({ value: tag, label: tag }))
+]);
 const selectedTodo = computed(() => todos.value.find((todo) => todo.id === selectedTodoId.value) ?? null);
 const currentStageIndex = computed(() => stages.findIndex((stage) => stage.id === props.stageId));
 const canUndo = computed(() => currentStageIndex.value > 0);
@@ -221,6 +232,16 @@ const clearInlineTagFilter = (): void => {
 };
 
 const isMentionInlineTagFilter = computed(() => inlineTagFilter.value?.startsWith('@') ?? false);
+
+watch(stageClientTags, (tags) => {
+  if (
+    clientTagFilter.value !== ALL_CLIENT_TAGS &&
+    clientTagFilter.value !== UNTAGGED_CLIENT_TAG &&
+    !tags.includes(clientTagFilter.value)
+  ) {
+    clientTagFilter.value = ALL_CLIENT_TAGS;
+  }
+});
 
 const setClientTagFilter = (tag: string): void => {
   clientTagFilter.value = tag;
@@ -407,3 +428,5 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     />
   </section>
 </template>
+
+

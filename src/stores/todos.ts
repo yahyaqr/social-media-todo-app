@@ -168,18 +168,7 @@ export const useTodosStore = defineStore('todos', () => {
   };
 
   const clientTags = computed(() => {
-    const tags = new Set(rememberedClientTags.value);
-
-    for (const stage of stages) {
-      for (const todo of todosByStage.value[stage.id]) {
-        const tag = normalizeClientTag(todo.clientTag);
-        if (tag) {
-          tags.add(tag);
-        }
-      }
-    }
-
-    return [...tags].sort((a, b) => a.localeCompare(b));
+    return buildClientTagCatalog(todosByStage.value, []);
   });
 
   const stageProgress = computed(() => (stageId: StageId): string => {
