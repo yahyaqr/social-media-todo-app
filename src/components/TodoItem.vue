@@ -71,6 +71,11 @@ const timingClass = computed(() => {
 const linkList = computed(() => props.todo.links ?? []);
 const primaryLink = computed(() => linkList.value[0]);
 const extraLinkCount = computed(() => Math.max(0, linkList.value.length - 1));
+const inlineTags = computed(() => {
+  const source = `${props.todo.text}\n${props.todo.content ?? ''}`;
+  const matches = source.match(/@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+/g) ?? [];
+  return [...new Set(matches)];
+});
 </script>
 
 <template>
@@ -99,7 +104,10 @@ const extraLinkCount = computed(() => Math.max(0, linkList.value.length - 1));
       >
         {{ todo.text }}
       </p>
-      <div v-if="dueLabel || todo.clientTag || linkList.length" class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
+      <div
+        v-if="dueLabel || todo.clientTag || linkList.length || inlineTags.length"
+        class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs"
+      >
         <span
           v-if="dueLabel"
           class="rounded-full px-2 py-0.5"
@@ -122,6 +130,14 @@ const extraLinkCount = computed(() => Math.max(0, linkList.value.length - 1));
         </a>
         <span v-if="extraLinkCount" class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
           +{{ extraLinkCount }} more
+        </span>
+        <span
+          v-for="(tag, index) in inlineTags"
+          :key="`${tag}-${index}`"
+          class="rounded-full px-2 py-0.5"
+          :class="tag.startsWith('@') ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'"
+        >
+          {{ tag }}
         </span>
       </div>
     </div>
