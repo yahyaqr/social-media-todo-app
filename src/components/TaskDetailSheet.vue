@@ -52,8 +52,6 @@ const detailContent = ref('');
 const detailContentInput = ref<HTMLTextAreaElement | null>(null);
 const showContentPreview = ref(false);
 const showClientTagSuggestions = ref(false);
-const linkPasteHoldTimer = ref<number | null>(null);
-const linkPasteLongPressTriggered = ref(false);
 const activeLinkIndex = ref(0);
 const linkSwiper = ref<any>(null);
 
@@ -254,31 +252,6 @@ const pasteLinkFromClipboard = async (): Promise<void> => {
   } catch {
     // Ignore clipboard permission/runtime errors.
   }
-};
-
-const clearLinkPasteHoldTimer = (): void => {
-  if (linkPasteHoldTimer.value !== null) {
-    window.clearTimeout(linkPasteHoldTimer.value);
-    linkPasteHoldTimer.value = null;
-  }
-};
-
-const startLinkPasteHold = (): void => {
-  clearLinkPasteHoldTimer();
-  linkPasteLongPressTriggered.value = false;
-  linkPasteHoldTimer.value = window.setTimeout(() => {
-    linkPasteLongPressTriggered.value = true;
-    void pasteLinkFromClipboard();
-  }, 500);
-};
-
-const handleDetailAddLinkButtonClick = (): void => {
-  if (linkPasteLongPressTriggered.value) {
-    linkPasteLongPressTriggered.value = false;
-    return;
-  }
-
-  appendDetailLink();
 };
 
 const closeDetails = (): void => {
@@ -580,27 +553,36 @@ const createdLabel = computed(() => {
             </div>
             <div class="space-y-2 md:col-span-2">
               <div class="flex gap-2">
-                <input
-                  v-model="detailLinkInput"
-                  type="url"
-                  placeholder="Add link"
-                  class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-                  aria-label="Task link"
-                  @keydown.enter.prevent="appendDetailLink"
-                  @blur="appendDetailLink"
-                />
+                <div class="relative w-full">
+                  <input
+                    v-model="detailLinkInput"
+                    type="url"
+                    placeholder="Add link"
+                    class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
+                    aria-label="Task link"
+                    @keydown.enter.prevent="appendDetailLink"
+                    @blur="appendDetailLink"
+                  />
+                  <button
+                    type="button"
+                    class="absolute right-2 top-1/2 inline-flex h-8 w-12 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-300/70 bg-white/70 text-slate-600 backdrop-blur-sm hover:bg-white/90"
+                    aria-label="Paste link"
+                    title="Paste link"
+                    @click="pasteLinkFromClipboard"
+                  >
+                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="3" width="6" height="4" rx="1" />
+                      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                      <path d="M9 14l2 2 4-4" />
+                    </svg>
+                  </button>
+                </div>
                 <button
                   type="button"
                   class="inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl border border-slate-300 px-3 text-slate-700 hover:bg-slate-100"
                   aria-label="Add link"
                   title="Add link"
-                  @click="handleDetailAddLinkButtonClick"
-                  @mousedown="startLinkPasteHold"
-                  @mouseup="clearLinkPasteHoldTimer"
-                  @mouseleave="clearLinkPasteHoldTimer"
-                  @touchstart="startLinkPasteHold"
-                  @touchend="clearLinkPasteHoldTimer"
-                  @touchcancel="clearLinkPasteHoldTimer"
+                  @click="appendDetailLink"
                 >
                   <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 5v14" />
