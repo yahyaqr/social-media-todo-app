@@ -393,13 +393,13 @@ const createdLabel = computed(() => {
       <div class="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white p-3 sm:p-4">
         <button
           type="button"
-          class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+          class="inline-flex h-9 w-24 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
           aria-label="Back"
           title="Back"
           @click="closeDetails"
         >
-          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 18l-6-6 6-6" />
+          <svg viewBox="0 0 32 24" class="h-4 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M30 12H2M9 19l-7-7 7-7" />
           </svg>
         </button>
 
