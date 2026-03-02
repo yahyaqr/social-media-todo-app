@@ -644,24 +644,24 @@ const createdLabel = computed(() => {
                   <button
                     v-if="detailLinks.length > 1"
                     type="button"
-                    class="absolute left-2 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    class="absolute left-0 top-0 z-20 inline-flex h-full w-14 items-center justify-center bg-gradient-to-r from-white/95 via-white/70 to-transparent text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Previous link"
                     :disabled="!canGoToPreviousLink"
                     @click="goToPreviousLink"
                   >
-                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M15 18l-6-6 6-6" />
                     </svg>
                   </button>
                   <button
                     v-if="detailLinks.length > 1"
                     type="button"
-                    class="absolute right-2 top-1/2 z-20 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white/95 text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    class="absolute right-0 top-0 z-20 inline-flex h-full w-14 items-center justify-center bg-gradient-to-l from-white/95 via-white/70 to-transparent text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Next link"
                     :disabled="!canGoToNextLink"
                     @click="goToNextLink"
                   >
-                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M9 6l6 6-6 6" />
                     </svg>
                   </button>
