@@ -98,6 +98,21 @@ const filteredTodos = computed(() => {
   const list = [...todos.value];
 
   list.sort((a, b) => {
+    const aTag = (a.clientTag ?? '').trim().toLowerCase();
+    const bTag = (b.clientTag ?? '').trim().toLowerCase();
+
+    if (aTag && !bTag) {
+      return -1;
+    }
+
+    if (!aTag && bTag) {
+      return 1;
+    }
+
+    if (aTag !== bTag) {
+      return aTag.localeCompare(bTag);
+    }
+
     const aDue = a.dueAt ?? Number.MAX_SAFE_INTEGER;
     const bDue = b.dueAt ?? Number.MAX_SAFE_INTEGER;
     if (aDue !== bDue) {
