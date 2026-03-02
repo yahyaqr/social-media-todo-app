@@ -171,6 +171,11 @@ const appendDetailLink = (): void => {
   saveDetails();
 };
 
+const closeDetails = (): void => {
+  appendDetailLink();
+  emit('close');
+};
+
 const removeDetailLink = (index: number): void => {
   detailLinks.value = detailLinks.value.filter((_, current) => current !== index);
   saveDetails();
@@ -283,7 +288,7 @@ const createdLabel = computed(() => {
           class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
           aria-label="Back"
           title="Back"
-          @click="emit('close')"
+          @click="closeDetails"
         >
           <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 18l-6-6 6-6" />
@@ -371,6 +376,7 @@ const createdLabel = computed(() => {
                   class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
                   aria-label="Task link"
                   @keydown.enter.prevent="appendDetailLink"
+                  @blur="appendDetailLink"
                 />
                 <button
                   type="button"
