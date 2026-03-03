@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useTodosStore } from '../stores/todos';
-import { stages, type StageId, type Todo } from '../data/stages';
+import { type StageId, type Todo } from '../data/stages';
 import BasicDropdown from './BasicDropdown.vue';
-import TaskDetailSheet from './TaskDetailSheet.vue';
 import TodoItem from './TodoItem.vue';
 
 type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
@@ -14,6 +14,7 @@ const props = defineProps<{
   stageId: StageId;
 }>();
 
+const router = useRouter();
 const store = useTodosStore();
 
 const filter = ref<FilterMode>('all');
@@ -29,7 +30,6 @@ const filterOptions: Array<{ value: FilterMode; label: string }> = [
 
 
 const draggingTodoId = ref<string | null>(null);
-const selectedTodoId = ref<string | null>(null);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
 const stageClientTags = computed(() => {
@@ -47,10 +47,6 @@ const clientTagFilterOptions = computed<Array<{ value: string; label: string }>>
   { value: UNTAGGED_CLIENT_TAG, label: 'No client tag' },
   ...stageClientTags.value.map((tag) => ({ value: tag, label: tag }))
 ]);
-const selectedTodo = computed(() => todos.value.find((todo) => todo.id === selectedTodoId.value) ?? null);
-const currentStageIndex = computed(() => stages.findIndex((stage) => stage.id === props.stageId));
-const canUndo = computed(() => currentStageIndex.value > 0);
-const canAdvance = computed(() => currentStageIndex.value >= 0 && currentStageIndex.value < stages.length - 1);
 
 const dayBoundaries = () => {
   const now = new Date();
@@ -174,11 +170,7 @@ const openDetails = (todoId: string): void => {
     return;
   }
 
-  selectedTodoId.value = todoId;
-};
-
-const closeDetails = (): void => {
-  selectedTodoId.value = null;
+  void router.push({ name: 'task-detail', params: { stageId: props.stageId, todoId } });
 };
 
 const setInlineTagFilter = (tag: string): void => {
@@ -205,54 +197,8 @@ const setClientTagFilter = (tag: string): void => {
   clientTagFilter.value = tag;
 };
 
-const deleteSelectedTodo = (): void => {
-  const todo = selectedTodo.value;
-  if (!todo) {
-    return;
-  }
-
-  store.deleteTodo(props.stageId, todo.id);
-  closeDetails();
-};
-
-const updateDetails = (updates: {
-  text?: string;
-  dueAt?: number;
-  done?: boolean;
-  pinned?: boolean;
-  clientTag?: string;
-  links?: string[];
-  linkCaptions?: string[];
-  content?: string;
-}): void => {
-  const todo = selectedTodo.value;
-  if (!todo) {
-    return;
-  }
-
-  store.updateTodo(props.stageId, todo.id, updates);
-};
-
 const togglePinned = (stageId: StageId, todoId: string, pinned: boolean): void => {
   store.updateTodo(stageId, todoId, { pinned });
-};
-
-const moveSelectedTodo = (direction: -1 | 1): void => {
-  const todo = selectedTodo.value;
-  if (!todo) {
-    return;
-  }
-
-  const nextIndex = currentStageIndex.value + direction;
-  if (nextIndex < 0 || nextIndex >= stages.length) {
-    return;
-  }
-
-  const targetStageId = stages[nextIndex].id;
-  const moved = store.moveTodoToStage(props.stageId, todo.id, targetStageId);
-  if (moved) {
-    closeDetails();
-  }
 };
 
 const onDragStart = (todoId: string) => {
@@ -322,20 +268,6 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
     <p v-else class="mt-4 rounded-xl bg-white p-4 text-center text-sm text-slate-500">
       No tasks in this filter yet.
     </p>
-
-    <TaskDetailSheet
-      :visible="Boolean(selectedTodo)"
-      :todo="selectedTodo"
-      :stage-id="stageId"
-      :client-tags="store.clientTags"
-      :can-undo="canUndo"
-      :can-advance="canAdvance"
-      @close="closeDetails"
-      @delete="deleteSelectedTodo"
-      @update="updateDetails"
-      @undo="moveSelectedTodo(-1)"
-      @advance="moveSelectedTodo(1)"
-    />
   </section>
 </template>
 

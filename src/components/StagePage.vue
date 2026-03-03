@@ -17,7 +17,7 @@ const progressText = computed(() => store.stageProgress(props.stage.id));
 </script>
 
 <template>
-  <article class="h-full overflow-y-auto px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5">
+  <article class="h-full overflow-y-auto px-3 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5">
     <header
       class="mb-3 rounded-2xl p-3 shadow-sm ring-1 sm:mb-4 sm:p-4"
       :class="props.isToday ? 'bg-amber-50 ring-amber-300' : 'bg-white ring-slate-200'"

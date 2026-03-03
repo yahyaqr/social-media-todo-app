@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue';
+import { RouterView } from 'vue-router';
 import AuthScreen from './components/AuthScreen.vue';
-import StagePager from './components/StagePager.vue';
 import { useAuthStore } from './stores/auth';
 import { useTodosStore } from './stores/todos';
 
@@ -35,7 +35,7 @@ watch(
 
   <main v-else class="h-[100dvh] bg-slate-100 text-slate-900">
     <div class="h-full">
-      <StagePager />
+      <RouterView />
     </div>
 
     <p v-if="todosStore.cloudError" class="px-3 pb-2 pt-1 text-xs text-rose-600 sm:px-4">
