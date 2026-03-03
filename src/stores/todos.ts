@@ -105,6 +105,48 @@ const buildClientTagCatalog = (todosByStage: TodosByStage, existing: string[] = 
   return [...tags].sort((a, b) => a.localeCompare(b));
 };
 
+const CLOUD_RETRY_BASE_DELAY_MS = 1000;
+const CLOUD_RETRY_MAX_DELAY_MS = 30000;
+
+type CloudWriteContext = {
+  stageId?: StageId;
+  todoId?: string;
+};
+
+type PendingCloudWrite = {
+  action: (uid: string) => Promise<void>;
+  context?: CloudWriteContext;
+};
+
+const toActionableCloudError = (error: unknown, fallback: string): string => {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : '';
+
+  if (code === 'permission-denied') {
+    return 'Cloud sync denied by Firestore rules. Sign in with the correct account and verify rules allow this user.';
+  }
+
+  if (code === 'unauthenticated') {
+    return 'Cloud sync requires authentication. Please sign in again.';
+  }
+
+  if (code === 'unavailable') {
+    return 'Cloud sync is temporarily unavailable. Check network connection and retry.';
+  }
+
+  if (code === 'failed-precondition') {
+    return 'Cloud sync failed precondition. Check Firebase project config and Firestore setup.';
+  }
+
+  if (code === 'deadline-exceeded') {
+    return 'Cloud sync timed out. Check your connection and retry.';
+  }
+
+  return error instanceof Error && error.message ? error.message : fallback;
+};
+
 export const useTodosStore = defineStore('todos', () => {
   const todosByStage = ref<TodosByStage>(createEmptyTodosByStage());
   const rememberedClientTags = ref<string[]>([]);
@@ -114,7 +156,67 @@ export const useTodosStore = defineStore('todos', () => {
   const cloudUid = ref<string | null>(null);
   let cloudUnsubscribe: (() => void) | null = null;
   let cloudInitPromise: Promise<void> | null = null;
-  const pendingCloudWrites: Array<(uid: string) => Promise<void>> = [];
+  let cloudRetryTimeoutId: number | null = null;
+  let cloudRetryAttempts = 0;
+  const pendingCloudWrites: PendingCloudWrite[] = [];
+
+  const clearCloudRetryTimeout = (): void => {
+    if (cloudRetryTimeoutId === null) {
+      return;
+    }
+
+    window.clearTimeout(cloudRetryTimeoutId);
+    cloudRetryTimeoutId = null;
+  };
+
+  const markTodoSyncFailed = (stageId: StageId, todoId: string, errorMessage: string): void => {
+    const todo = todosByStage.value[stageId].find((item) => item.id === todoId);
+    if (!todo) {
+      return;
+    }
+
+    todo.syncPending = false;
+    todo.syncFailed = true;
+    todo.syncError = errorMessage;
+  };
+
+  const markTodoSyncPending = (stageId: StageId, todoId: string): void => {
+    const todo = todosByStage.value[stageId].find((item) => item.id === todoId);
+    if (!todo) {
+      return;
+    }
+
+    todo.syncPending = true;
+    todo.syncFailed = false;
+    todo.syncError = undefined;
+  };
+
+  const clearTodoSyncFailed = (stageId: StageId, todoId: string): void => {
+    const todo = todosByStage.value[stageId].find((item) => item.id === todoId);
+    if (!todo) {
+      return;
+    }
+
+    if (todo.syncPending || todo.syncFailed || todo.syncError) {
+      todo.syncPending = false;
+      todo.syncFailed = false;
+      todo.syncError = undefined;
+    }
+  };
+
+  const scheduleCloudInitRetry = (): void => {
+    if (cloudReady.value || cloudInitPromise || cloudRetryTimeoutId !== null) {
+      return;
+    }
+
+    const delay = Math.min(CLOUD_RETRY_MAX_DELAY_MS, CLOUD_RETRY_BASE_DELAY_MS * 2 ** cloudRetryAttempts);
+    cloudRetryAttempts += 1;
+
+    cloudRetryTimeoutId = window.setTimeout(() => {
+      cloudRetryTimeoutId = null;
+      void initCloudSync();
+    }, delay);
+  };
 
   const flushPendingCloudWrites = (): void => {
     const uid = cloudUid.value;
@@ -125,26 +227,61 @@ export const useTodosStore = defineStore('todos', () => {
     const queuedActions = [...pendingCloudWrites];
     pendingCloudWrites.length = 0;
 
-    for (const action of queuedActions) {
-      void action(uid).catch((error: unknown) => {
-        cloudError.value = error instanceof Error ? error.message : 'Cloud sync failed.';
-      });
+    for (const { action, context } of queuedActions) {
+      void action(uid)
+        .then(() => {
+          if (context?.stageId && context.todoId) {
+            clearTodoSyncFailed(context.stageId, context.todoId);
+          }
+        })
+        .catch((error: unknown) => {
+          const actionableError = toActionableCloudError(error, 'Cloud sync failed.');
+          console.error('[cloud-write] failed while flushing queued action', error);
+          cloudError.value = actionableError;
+          if (context?.stageId && context.todoId) {
+            markTodoSyncFailed(context.stageId, context.todoId, actionableError);
+          }
+          scheduleCloudInitRetry();
+        });
     }
   };
 
-  const runCloudWrite = (action: (uid: string) => Promise<void>): void => {
+  const runCloudWrite = (action: (uid: string) => Promise<void>, context?: CloudWriteContext): void => {
+    if (context?.stageId && context.todoId) {
+      markTodoSyncPending(context.stageId, context.todoId);
+    }
+
     const uid = cloudUid.value;
     if (!uid) {
-      pendingCloudWrites.push(action);
+      pendingCloudWrites.push({ action, context });
       return;
     }
 
-    void action(uid).catch((error: unknown) => {
-      cloudError.value = error instanceof Error ? error.message : 'Cloud sync failed.';
-    });
+    void action(uid)
+      .then(() => {
+        if (context?.stageId && context.todoId) {
+          clearTodoSyncFailed(context.stageId, context.todoId);
+        }
+      })
+      .catch((error: unknown) => {
+        const actionableError = toActionableCloudError(error, 'Cloud sync failed.');
+        console.error('[cloud-write] failed', error);
+        cloudError.value = actionableError;
+        if (context?.stageId && context.todoId) {
+          markTodoSyncFailed(context.stageId, context.todoId, actionableError);
+        }
+        scheduleCloudInitRetry();
+      });
   };
 
   const applyCloudSnapshot = (snapshot: CloudSnapshot): void => {
+    const localUnsyncedByStage: TodosByStage = createEmptyTodosByStage();
+    for (const stage of stages) {
+      localUnsyncedByStage[stage.id] = (todosByStage.value[stage.id] ?? []).filter(
+        (todo) => todo.syncPending || todo.syncFailed
+      );
+    }
+
     const nextTodosByStage: TodosByStage = {
       ...createEmptyTodosByStage(),
       ...snapshot.todosByStage
@@ -155,11 +292,20 @@ export const useTodosStore = defineStore('todos', () => {
       nextTodosByStage[stage.id] = list.map((todo) => ({
         ...todo,
         pinned: Boolean(todo.pinned),
+        syncPending: false,
+        syncFailed: false,
+        syncError: undefined,
         links: normalizeLinks(todo.links ?? []),
         linkCaptions: normalizeLinkCaptions(todo.linkCaptions ?? [], todo.links?.length ?? 0),
         clientTag: normalizeClientTag(todo.clientTag),
         content: normalizeContent(todo.content)
       }));
+
+      const presentIds = new Set(nextTodosByStage[stage.id].map((todo) => todo.id));
+      const missingUnsyncedLocals = localUnsyncedByStage[stage.id].filter((todo) => !presentIds.has(todo.id));
+      if (missingUnsyncedLocals.length) {
+        nextTodosByStage[stage.id] = [...missingUnsyncedLocals, ...nextTodosByStage[stage.id]];
+      }
     }
 
     todosByStage.value = nextTodosByStage;
@@ -179,7 +325,7 @@ export const useTodosStore = defineStore('todos', () => {
 
       const todo = todosByStage.value[stageId][index];
       await upsertCloudTodo(uid, stageId, todo, index);
-    });
+    }, { stageId, todoId });
   };
 
   const syncStageOrder = (stageId: StageId): void => {
@@ -322,7 +468,7 @@ export const useTodosStore = defineStore('todos', () => {
       return;
     }
 
-    runCloudWrite((uid) => deleteCloudTodo(uid, todoId));
+    runCloudWrite((uid) => deleteCloudTodo(uid, todoId), { stageId, todoId });
     syncStageOrder(stageId);
   };
 
@@ -402,19 +548,36 @@ export const useTodosStore = defineStore('todos', () => {
         cloudUid.value = uid;
         flushPendingCloudWrites();
 
+        if (cloudUnsubscribe) {
+          cloudUnsubscribe();
+          cloudUnsubscribe = null;
+        }
+
         cloudUnsubscribe = subscribeToCloudState(
           uid,
           (snapshot) => {
             applyCloudSnapshot(snapshot);
             cloudReady.value = true;
             cloudError.value = null;
+            cloudRetryAttempts = 0;
+            clearCloudRetryTimeout();
           },
           (error) => {
-            cloudError.value = error instanceof Error ? error.message : 'Cloud sync listener failed.';
+            if (cloudUnsubscribe) {
+              cloudUnsubscribe();
+              cloudUnsubscribe = null;
+            }
+            cloudReady.value = false;
+            cloudError.value = toActionableCloudError(error, 'Cloud sync listener failed.');
+            console.error('[cloud-listener] failed', error);
+            scheduleCloudInitRetry();
           }
         );
       } catch (error) {
-        cloudError.value = error instanceof Error ? error.message : 'Failed to initialize cloud sync.';
+        cloudReady.value = false;
+        cloudError.value = toActionableCloudError(error, 'Failed to initialize cloud sync.');
+        console.error('[cloud-init] failed', error);
+        scheduleCloudInitRetry();
       } finally {
         cloudInitPromise = null;
       }
@@ -433,7 +596,15 @@ export const useTodosStore = defineStore('todos', () => {
     rememberedClientTags.value = [];
     cloudReady.value = false;
     cloudUid.value = null;
+    cloudRetryAttempts = 0;
+    clearCloudRetryTimeout();
     pendingCloudWrites.length = 0;
+  };
+
+  const retryCloudSync = (): void => {
+    cloudError.value = null;
+    clearCloudRetryTimeout();
+    void initCloudSync();
   };
 
   return {
@@ -450,6 +621,7 @@ export const useTodosStore = defineStore('todos', () => {
     reorderTodo,
     moveTodoToStage,
     initCloudSync,
+    retryCloudSync,
     stopCloudSync
   };
 });

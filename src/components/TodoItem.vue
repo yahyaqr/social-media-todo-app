@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
     <button
       v-else-if="todo.pinned"
       type="button"
-      class="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-amber-600 hover:bg-amber-100"
+      class="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 hover:bg-blue-100"
       aria-label="Unpin task"
       title="Unpin"
       @click.stop="unpinFromIndicator"
@@ -273,9 +273,23 @@ onBeforeUnmount(() => {
         <span v-else>{{ titleWithClientTag.text }}</span>
       </p>
       <div
-        v-if="dueLabel || todo.clientTag || linkList.length || inlineTags.length"
+        v-if="todo.syncPending || todo.syncFailed || dueLabel || todo.clientTag || linkList.length || inlineTags.length"
         class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs"
       >
+        <span
+          v-if="todo.syncPending"
+          class="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700"
+          title="Waiting for cloud sync"
+        >
+          Syncing...
+        </span>
+        <span
+          v-if="todo.syncFailed"
+          class="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700"
+          :title="todo.syncError || 'Cloud sync failed'"
+        >
+          Sync failed
+        </span>
         <span
           v-if="dueLabel"
           class="rounded-full px-2 py-0.5"

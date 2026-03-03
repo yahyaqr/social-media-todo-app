@@ -12,6 +12,9 @@ export type Todo = {
   text: string;
   done: boolean;
   pinned?: boolean;
+  syncPending?: boolean;
+  syncFailed?: boolean;
+  syncError?: string;
   createdAt: number;
   dueAt?: number;
   clientTag?: string;
