@@ -487,22 +487,47 @@ const createdLabel = computed(() => {
                           </svg>
                         </button>
                       </div>
-
-                      <iframe
-                        v-if="getInstagramEmbedUrl(item)"
-                        :src="getInstagramEmbedUrl(item) as string"
-                        class="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
-                        loading="lazy"
-                        scrolling="no"
-                        frameborder="0"
-                        allowfullscreen
-                        title="Instagram preview"
-                      />
-                      <div
-                        v-else
-                        class="flex h-28 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500"
-                      >
-                        Preview available for Instagram post links.
+                      <div class="relative">
+                        <iframe
+                          v-if="getInstagramEmbedUrl(item)"
+                          :src="getInstagramEmbedUrl(item) as string"
+                          class="h-[430px] w-full rounded-lg border border-slate-200 bg-white"
+                          loading="lazy"
+                          scrolling="no"
+                          frameborder="0"
+                          allowfullscreen
+                          title="Instagram preview"
+                        />
+                        <div
+                          v-else
+                          class="flex h-28 w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center text-xs text-slate-500"
+                        >
+                          Preview available for Instagram post links.
+                        </div>
+                        <button
+                          v-if="detailLinks.length > 1"
+                          type="button"
+                          class="absolute left-0 top-0 z-20 inline-flex h-full w-14 items-center justify-center rounded-l-lg bg-gradient-to-r from-white/95 via-white/70 to-transparent text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Previous link"
+                          :disabled="!canGoToPreviousLink"
+                          @click="goToPreviousLink"
+                        >
+                          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M15 18l-6-6 6-6" />
+                          </svg>
+                        </button>
+                        <button
+                          v-if="detailLinks.length > 1"
+                          type="button"
+                          class="absolute right-0 top-0 z-20 inline-flex h-full w-14 items-center justify-center rounded-r-lg bg-gradient-to-l from-white/95 via-white/70 to-transparent text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Next link"
+                          :disabled="!canGoToNextLink"
+                          @click="goToNextLink"
+                        >
+                          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 6l6 6-6 6" />
+                          </svg>
+                        </button>
                       </div>
                       <textarea
                         :ref="(el) => setLinkCaptionTextareaRef(index, el)"
@@ -515,31 +540,6 @@ const createdLabel = computed(() => {
                       />
                     </SwiperSlide>
                   </Swiper>
-
-                  <button
-                    v-if="detailLinks.length > 1"
-                    type="button"
-                    class="absolute left-0 top-0 z-20 inline-flex h-full w-14 items-center justify-center bg-gradient-to-r from-white/95 via-white/70 to-transparent text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Previous link"
-                    :disabled="!canGoToPreviousLink"
-                    @click="goToPreviousLink"
-                  >
-                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M15 18l-6-6 6-6" />
-                    </svg>
-                  </button>
-                  <button
-                    v-if="detailLinks.length > 1"
-                    type="button"
-                    class="absolute right-0 top-0 z-20 inline-flex h-full w-14 items-center justify-center bg-gradient-to-l from-white/95 via-white/70 to-transparent text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Next link"
-                    :disabled="!canGoToNextLink"
-                    @click="goToNextLink"
-                  >
-                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M9 6l6 6-6 6" />
-                    </svg>
-                  </button>
                 </div>
 
                 <div v-if="detailLinks.length > 1" class="flex items-center justify-center gap-1.5 pb-1">
