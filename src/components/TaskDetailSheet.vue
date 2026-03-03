@@ -222,6 +222,11 @@ const closeDetails = (): void => {
 };
 
 const removeDetailLink = (index: number): void => {
+  const shouldRemove = window.confirm('Remove this link from the task?');
+  if (!shouldRemove) {
+    return;
+  }
+
   detailLinks.value = detailLinks.value.filter((_, current) => current !== index);
   detailLinkCaptions.value = detailLinkCaptions.value.filter((_, current) => current !== index);
   if (!detailLinks.value.length) {
