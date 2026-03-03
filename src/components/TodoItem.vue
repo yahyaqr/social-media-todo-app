@@ -73,6 +73,17 @@ const timingClass = computed(() => {
 const linkList = computed(() => props.todo.links ?? []);
 const primaryLink = computed(() => linkList.value[0]);
 const extraLinkCount = computed(() => Math.max(0, linkList.value.length - 1));
+const toTextContent = (value?: string): string => {
+  const source = value ?? '';
+  if (!source.includes('<')) {
+    return source;
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(source, 'text/html');
+  return doc.body.textContent ?? '';
+};
+
 const titleWithClientTag = computed(() => {
   const tag = props.todo.clientTag?.trim();
   const text = props.todo.text;
@@ -88,7 +99,7 @@ const titleWithClientTag = computed(() => {
   return { prefix, text };
 });
 const inlineTags = computed(() => {
-  const source = `${props.todo.text}\n${props.todo.content ?? ''}`;
+  const source = `${props.todo.text}\n${toTextContent(props.todo.content)}`;
   const matches = source.match(/@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+/g) ?? [];
   return [...new Set(matches)];
 });

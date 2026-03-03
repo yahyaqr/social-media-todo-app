@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import type { StageId, Todo } from '../data/stages';
+import FullContentEditor from './FullContentEditor.vue';
 
 type TaskUpdates = {
   text?: string;
@@ -11,19 +12,6 @@ type TaskUpdates = {
   links?: string[];
   linkCaptions?: string[];
   content?: string;
-};
-
-type ContentSegment = {
-  text: string;
-  bold: boolean;
-  tagType?: 'mention' | 'topic';
-  linkUrl?: string;
-};
-
-type ContentLine = {
-  kind: 'paragraph' | 'bullet' | 'checkbox';
-  checked?: boolean;
-  segments: ContentSegment[];
 };
 
 const props = defineProps<{
@@ -50,8 +38,6 @@ const detailLinks = ref<string[]>([]);
 const detailLinkCaptions = ref<string[]>([]);
 const detailLinkInput = ref('');
 const detailContent = ref('');
-const detailContentInput = ref<HTMLTextAreaElement | null>(null);
-const showContentPreview = ref(false);
 const showClientTagSuggestions = ref(false);
 const activeLinkIndex = ref(0);
 const linkSwiper = ref<any>(null);
@@ -60,12 +46,6 @@ const linkCaptionTextareaRefs = ref<Record<number, HTMLTextAreaElement | null>>(
 const autoResizeTextarea = (textarea: HTMLTextAreaElement): void => {
   textarea.style.height = 'auto';
   textarea.style.height = `${textarea.scrollHeight}px`;
-};
-
-const resizeDetailContentTextarea = (): void => {
-  if (detailContentInput.value) {
-    autoResizeTextarea(detailContentInput.value);
-  }
 };
 
 const setLinkCaptionTextareaRef = (index: number, element: unknown): void => {
@@ -99,119 +79,6 @@ const parseDate = (value: string): number | undefined => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-const normalizeBulletLines = (value: string): string => {
-  return value
-    .split('\n')
-    .map((line) => {
-      const match = line.match(/^(\s*)(?:[-*]|•)\s+(.*)$/);
-      if (!match) {
-        return line;
-      }
-      return `${match[1]}- ${match[2]}`;
-    })
-    .join('\n');
-};
-
-const splitBoldSegments = (text: string): ContentSegment[] => {
-  const splitTagSegments = (value: string, bold: boolean): ContentSegment[] => {
-    const segments: ContentSegment[] = [];
-    const tagPattern = /(@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+)/g;
-    let lastIndex = 0;
-
-    for (const match of value.matchAll(tagPattern)) {
-      const index = match.index ?? 0;
-      if (index > lastIndex) {
-        segments.push({
-          text: value.slice(lastIndex, index),
-          bold
-        });
-      }
-
-      const tag = match[0];
-      segments.push({
-        text: tag,
-        bold,
-        tagType: tag.startsWith('@') ? 'mention' : 'topic'
-      });
-
-      lastIndex = index + tag.length;
-    }
-
-    if (lastIndex < value.length) {
-      segments.push({
-        text: value.slice(lastIndex),
-        bold
-      });
-    }
-
-    return segments;
-  };
-
-  const splitTagAndUrlSegments = (value: string, bold: boolean): ContentSegment[] => {
-    const segments: ContentSegment[] = [];
-    const urlPattern = /(https?:\/\/[^\s)]+)/g;
-    let lastIndex = 0;
-
-    for (const match of value.matchAll(urlPattern)) {
-      const index = match.index ?? 0;
-      if (index > lastIndex) {
-        segments.push(...splitTagSegments(value.slice(lastIndex, index), bold));
-      }
-
-      const url = match[0];
-      segments.push({
-        text: url,
-        bold,
-        linkUrl: url
-      });
-
-      lastIndex = index + url.length;
-    }
-
-    if (lastIndex < value.length) {
-      segments.push(...splitTagSegments(value.slice(lastIndex), bold));
-    }
-
-    return segments;
-  };
-
-  const splitMarkdownLinkSegments = (value: string, bold: boolean): ContentSegment[] => {
-    const segments: ContentSegment[] = [];
-    const markdownLinkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    let lastIndex = 0;
-
-    for (const match of value.matchAll(markdownLinkPattern)) {
-      const index = match.index ?? 0;
-      if (index > lastIndex) {
-        segments.push(...splitTagAndUrlSegments(value.slice(lastIndex, index), bold));
-      }
-
-      const label = match[1];
-      const url = match[2];
-      segments.push({
-        text: label,
-        bold,
-        linkUrl: url
-      });
-
-      lastIndex = index + match[0].length;
-    }
-
-    if (lastIndex < value.length) {
-      segments.push(...splitTagAndUrlSegments(value.slice(lastIndex), bold));
-    }
-
-    return segments;
-  };
-
-  const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-  return parts.flatMap((part) => {
-    const isBold = /^\*\*[^*]+\*\*$/.test(part);
-    const normalized = isBold ? part.slice(2, -2) : part;
-    return splitMarkdownLinkSegments(normalized, isBold);
-  });
-};
-
 const hydrateFromTodo = (todo: Todo): void => {
   detailTitle.value = todo.text;
   detailDueDate.value = formatDateInput(todo.dueAt);
@@ -227,10 +94,8 @@ const hydrateFromTodo = (todo: Todo): void => {
   });
   detailLinkInput.value = '';
   detailContent.value = todo.content ?? '';
-  showContentPreview.value = false;
   showClientTagSuggestions.value = false;
   void nextTick(() => {
-    resizeDetailContentTextarea();
     for (const textarea of Object.values(linkCaptionTextareaRefs.value)) {
       if (textarea) {
         autoResizeTextarea(textarea);
@@ -267,7 +132,7 @@ const saveDetails = (): void => {
     clientTag: detailClientTag.value,
     links: detailLinks.value,
     linkCaptions: detailLinkCaptions.value,
-    content: normalizeBulletLines(detailContent.value)
+    content: detailContent.value
   });
 };
 
@@ -448,149 +313,6 @@ const confirmDelete = (): void => {
 
   emit('delete');
 };
-
-const onContentInput = (): void => {
-  resizeDetailContentTextarea();
-  const normalized = normalizeBulletLines(detailContent.value);
-  if (normalized !== detailContent.value) {
-    detailContent.value = normalized;
-    void nextTick(() => {
-      resizeDetailContentTextarea();
-    });
-  }
-};
-
-const wrapContentSelectionBold = (): void => {
-  const input = detailContentInput.value;
-  if (!input) {
-    return;
-  }
-
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const selected = detailContent.value.slice(start, end);
-  const before = detailContent.value.slice(0, start);
-  const after = detailContent.value.slice(end);
-  const insert = `**${selected || 'bold text'}**`;
-  detailContent.value = `${before}${insert}${after}`;
-
-  void nextTick(() => {
-    const focusStart = start + 2;
-    const focusEnd = selected ? end + 2 : start + 11;
-    input.focus();
-    input.setSelectionRange(focusStart, focusEnd);
-    resizeDetailContentTextarea();
-  });
-
-  saveDetails();
-};
-
-const insertBulletAtCaret = (): void => {
-  const input = detailContentInput.value;
-  if (!input) {
-    return;
-  }
-
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const before = detailContent.value.slice(0, start);
-  const after = detailContent.value.slice(end);
-  const prefix = start === 0 || detailContent.value[start - 1] === '\n' ? '- ' : '\n- ';
-
-  detailContent.value = `${before}${prefix}${after}`;
-
-  void nextTick(() => {
-    const cursor = start + prefix.length;
-    input.focus();
-    input.setSelectionRange(cursor, cursor);
-    resizeDetailContentTextarea();
-  });
-
-  saveDetails();
-};
-
-const insertCheckboxAtCaret = (): void => {
-  const input = detailContentInput.value;
-  if (!input) {
-    return;
-  }
-
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const before = detailContent.value.slice(0, start);
-  const after = detailContent.value.slice(end);
-  const prefix = start === 0 || detailContent.value[start - 1] === '\n' ? '- [ ] ' : '\n- [ ] ';
-
-  detailContent.value = `${before}${prefix}${after}`;
-
-  void nextTick(() => {
-    const cursor = start + prefix.length;
-    input.focus();
-    input.setSelectionRange(cursor, cursor);
-    resizeDetailContentTextarea();
-  });
-
-  saveDetails();
-};
-
-const insertInlineLinkAtCaret = (): void => {
-  const input = detailContentInput.value;
-  if (!input) {
-    return;
-  }
-
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const selected = detailContent.value.slice(start, end).trim();
-  const label = selected || 'link';
-  const snippet = `[${label}](https://)`;
-
-  const before = detailContent.value.slice(0, start);
-  const after = detailContent.value.slice(end);
-  detailContent.value = `${before}${snippet}${after}`;
-
-  void nextTick(() => {
-    const urlStart = start + label.length + 3;
-    const urlEnd = urlStart + 8;
-    input.focus();
-    input.setSelectionRange(urlStart, urlEnd);
-    resizeDetailContentTextarea();
-  });
-
-  saveDetails();
-};
-
-const onContentKeydown = (event: KeyboardEvent): void => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
-    event.preventDefault();
-    wrapContentSelectionBold();
-  }
-};
-
-const contentPreview = computed<ContentLine[]>(() => {
-  if (!detailContent.value.trim()) {
-    return [];
-  }
-
-  return detailContent.value.split('\n').map((line) => {
-    const checkboxMatch = line.match(/^\s*-\s+\[( |x|X)\]\s+(.*)$/);
-    if (checkboxMatch) {
-      const checked = checkboxMatch[1].toLowerCase() === 'x';
-      return {
-        kind: 'checkbox',
-        checked,
-        segments: splitBoldSegments(checkboxMatch[2])
-      };
-    }
-
-    const bulletMatch = line.match(/^\s*-\s+(.*)$/);
-    const text = bulletMatch ? bulletMatch[1] : line;
-    return {
-      kind: bulletMatch ? 'bullet' : 'paragraph',
-      segments: splitBoldSegments(text)
-    };
-  });
-});
 
 const createdLabel = computed(() => {
   if (!props.todo) {
@@ -836,152 +558,12 @@ const createdLabel = computed(() => {
           </div>
 
           <div class="mt-5">
-            <div class="mb-2 flex items-center justify-between gap-3">
-              <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-700">Full Content</h3>
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-                  title="Bold (Ctrl/Cmd+B)"
-                  aria-label="Bold"
-                  @click="wrapContentSelectionBold"
-                >
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M7 6h7a3 3 0 010 6H7z" />
-                    <path d="M7 12h8a3 3 0 010 6H7z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-                  title="Insert bullet"
-                  aria-label="Insert bullet"
-                  @click="insertBulletAtCaret"
-                >
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M8 6h13" />
-                    <path d="M8 12h13" />
-                    <path d="M8 18h13" />
-                    <path d="M3 6h.01" />
-                    <path d="M3 12h.01" />
-                    <path d="M3 18h.01" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-                  title="Insert link"
-                  aria-label="Insert link"
-                  @click="insertInlineLinkAtCaret"
-                >
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M10 13a5 5 0 007.1 0l2.1-2.1a5 5 0 00-7.1-7.1L10 6" />
-                    <path d="M14 11a5 5 0 00-7.1 0L4.8 13.1a5 5 0 007.1 7.1L14 18" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-                  title="Insert checkbox"
-                  aria-label="Insert checkbox"
-                  @click="insertCheckboxAtCaret"
-                >
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="4" y="4" width="16" height="16" rx="2" />
-                    <path d="M8 12l3 3 5-6" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
-                  :aria-label="showContentPreview ? 'Hide preview' : 'Show preview'"
-                  :title="showContentPreview ? 'Hide preview' : 'Show preview'"
-                  @click="showContentPreview = !showContentPreview"
-                >
-                  <svg v-if="showContentPreview" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 3l18 18" />
-                    <path d="M10.6 10.6a3 3 0 004.2 4.2" />
-                    <path d="M9.9 5.1A10.9 10.9 0 0121 12a10.9 10.9 0 01-4.1 5.1" />
-                    <path d="M6.7 6.7A10.9 10.9 0 003 12a10.9 10.9 0 004.1 5.1" />
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <textarea
-              ref="detailContentInput"
+            <FullContentEditor
               v-model="detailContent"
-              rows="12"
-              class="w-full resize-none overflow-hidden rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-300 focus:ring-2"
-              placeholder="Write notes. Use - [ ] checkbox, @name mention, #topic tag, [label](https://...) link, - bullets, and **bold** or Ctrl/Cmd+B."
-              @input="onContentInput"
-              @keydown="onContentKeydown"
+              placeholder="Write notes... Tag people with @mention and topics with #tag."
               @blur="saveDetails"
+              @commit="saveDetails"
             />
-
-            <div v-if="showContentPreview" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p class="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Formatted Preview</p>
-              <div v-if="contentPreview.length" class="space-y-1 text-sm text-slate-800">
-                <div
-                  v-for="(line, index) in contentPreview"
-                  :key="index"
-                  class="flex items-start gap-2"
-                  :class="{ 'pl-0': line.kind === 'paragraph' }"
-                >
-                  <span v-if="line.kind === 'bullet'" class="mt-[1px] text-slate-500">&bull;</span>
-                  <span
-                    v-if="line.kind === 'checkbox'"
-                    class="mt-[1px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border"
-                    :class="
-                      line.checked
-                        ? 'border-emerald-500 bg-emerald-500 text-white'
-                        : 'border-slate-400 bg-white text-transparent'
-                    "
-                  >
-                    <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3">
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </span>
-                  <span :class="{ 'text-slate-500 line-through': line.kind === 'checkbox' && line.checked }">
-                    <template v-for="(segment, segmentIndex) in line.segments" :key="`${index}-${segmentIndex}`">
-                      <a
-                        v-if="segment.linkUrl"
-                        :href="segment.linkUrl"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-800"
-                        :class="{ 'font-semibold': segment.bold }"
-                      >
-                        {{ segment.text }}
-                      </a>
-                      <strong
-                        v-else-if="segment.bold"
-                        :class="{
-                          'rounded bg-sky-100 px-1 py-0.5 text-sky-700': segment.tagType === 'mention',
-                          'rounded bg-emerald-100 px-1 py-0.5 text-emerald-700': segment.tagType === 'topic'
-                        }"
-                      >
-                        {{ segment.text }}
-                      </strong>
-                      <span
-                        v-else
-                        :class="{
-                          'rounded bg-sky-100 px-1 py-0.5 text-sky-700': segment.tagType === 'mention',
-                          'rounded bg-emerald-100 px-1 py-0.5 text-emerald-700': segment.tagType === 'topic'
-                        }"
-                      >
-                        {{ segment.text }}
-                      </span>
-                    </template>
-                  </span>
-                </div>
-              </div>
-              <p v-else class="text-sm text-slate-400">No content yet.</p>
-            </div>
 
             <div class="mt-3 flex justify-between gap-2">
               <button

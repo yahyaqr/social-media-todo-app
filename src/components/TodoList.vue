@@ -87,8 +87,19 @@ const dayBoundaries = () => {
   return { start, end };
 };
 
+const toTextContent = (value?: string): string => {
+  const source = value ?? '';
+  if (!source.includes('<')) {
+    return source;
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(source, 'text/html');
+  return doc.body.textContent ?? '';
+};
+
 const extractInlineTags = (todo: Todo): string[] => {
-  const source = `${todo.text}\n${todo.content ?? ''}`;
+  const source = `${todo.text}\n${toTextContent(todo.content)}`;
   const matches = source.match(/@[A-Za-z0-9_]+|#[A-Za-z0-9_-]+/g) ?? [];
   return [...new Set(matches)];
 };
