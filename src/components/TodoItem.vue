@@ -19,14 +19,13 @@ const emit = defineEmits<{
   selectClientTag: [tag: string];
 }>();
 
-const HOLD_DURATION_MS = 1500;
+const HOLD_DURATION_MS = 350;
 const PIN_SPINNER_SHOW_DELAY_MS = 0;
-const PIN_COMMIT_MS = 1500;
+const PIN_COMMIT_MS = 350;
 const holdTimeoutId = ref<number | null>(null);
 const pinSpinnerStartTimeoutId = ref<number | null>(null);
 const pinCommitTimeoutId = ref<number | null>(null);
 const longPressTriggered = ref(false);
-const showTouchIndicator = ref(false);
 const isPinning = ref(false);
 const pinPreview = ref<boolean | null>(null);
 
@@ -63,10 +62,8 @@ const startHold = (event: PointerEvent): void => {
   clearHoldTimeout();
   clearPinTimers();
   longPressTriggered.value = false;
-  showTouchIndicator.value = true;
   holdTimeoutId.value = window.setTimeout(() => {
     longPressTriggered.value = true;
-    showTouchIndicator.value = false;
     pinPreview.value = true;
 
     pinSpinnerStartTimeoutId.value = window.setTimeout(() => {
@@ -85,7 +82,6 @@ const startHold = (event: PointerEvent): void => {
 };
 
 const cancelHold = (): void => {
-  showTouchIndicator.value = false;
   clearHoldTimeout();
 };
 
@@ -225,12 +221,7 @@ onBeforeUnmount(() => {
     @drop="onDragDrop"
   >
     <span
-      v-if="showTouchIndicator"
-      class="absolute right-2 top-2 inline-flex h-4 w-4 rounded-full border-2 border-blue-300 bg-blue-100/70 animate-pulse"
-      aria-hidden="true"
-    />
-    <span
-      v-else-if="isPinning"
+      v-if="isPinning"
       class="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center text-amber-600"
       aria-hidden="true"
     >
