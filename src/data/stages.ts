@@ -11,6 +11,7 @@ export type Todo = {
   id: string;
   text: string;
   done: boolean;
+  pinned?: boolean;
   createdAt: number;
   dueAt?: number;
   clientTag?: string;

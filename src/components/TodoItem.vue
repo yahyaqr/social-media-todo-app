@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { Pin } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import type { StageId, Todo } from '../data/stages';
 
 const props = defineProps<{
@@ -13,11 +14,84 @@ const emit = defineEmits<{
   dragStart: [todoId: string];
   dragDrop: [targetId: string];
   openDetails: [todoId: string];
+  togglePinned: [stageId: StageId, todoId: string, pinned: boolean];
   selectInlineTag: [tag: string];
   selectClientTag: [tag: string];
 }>();
 
+const HOLD_DURATION_MS = 500;
+const PIN_SPINNER_SHOW_DELAY_MS = 10;
+const PIN_COMMIT_MS = 50;
+const holdTimeoutId = ref<number | null>(null);
+const pinSpinnerStartTimeoutId = ref<number | null>(null);
+const pinCommitTimeoutId = ref<number | null>(null);
+const longPressTriggered = ref(false);
+const showTouchIndicator = ref(false);
+const isPinning = ref(false);
+const pinPreview = ref<boolean | null>(null);
+
+const clearHoldTimeout = (): void => {
+  if (holdTimeoutId.value === null) {
+    return;
+  }
+
+  window.clearTimeout(holdTimeoutId.value);
+  holdTimeoutId.value = null;
+};
+
+const clearPinTimers = (): void => {
+  if (pinSpinnerStartTimeoutId.value !== null) {
+    window.clearTimeout(pinSpinnerStartTimeoutId.value);
+    pinSpinnerStartTimeoutId.value = null;
+  }
+  if (pinCommitTimeoutId.value !== null) {
+    window.clearTimeout(pinCommitTimeoutId.value);
+    pinCommitTimeoutId.value = null;
+  }
+};
+
+const startHold = (event: PointerEvent): void => {
+  const target = event.target;
+  if (target instanceof Element && target.closest('button, a, input, textarea, select, label')) {
+    return;
+  }
+
+  if (isPinning.value || props.todo.pinned) {
+    return;
+  }
+
+  clearHoldTimeout();
+  clearPinTimers();
+  longPressTriggered.value = false;
+  showTouchIndicator.value = true;
+  holdTimeoutId.value = window.setTimeout(() => {
+    longPressTriggered.value = true;
+    showTouchIndicator.value = false;
+    pinPreview.value = true;
+
+    pinSpinnerStartTimeoutId.value = window.setTimeout(() => {
+      isPinning.value = true;
+      pinSpinnerStartTimeoutId.value = null;
+    }, PIN_SPINNER_SHOW_DELAY_MS);
+
+    pinCommitTimeoutId.value = window.setTimeout(() => {
+      emit('togglePinned', props.stageId, props.todo.id, true);
+      isPinning.value = false;
+      pinPreview.value = null;
+      pinCommitTimeoutId.value = null;
+    }, PIN_COMMIT_MS);
+    holdTimeoutId.value = null;
+  }, HOLD_DURATION_MS);
+};
+
+const cancelHold = (): void => {
+  showTouchIndicator.value = false;
+  clearHoldTimeout();
+};
+
 const onDragStart = (): void => {
+  cancelHold();
+  clearPinTimers();
   emit('dragStart', props.todo.id);
 };
 
@@ -26,6 +100,11 @@ const onDragDrop = (): void => {
 };
 
 const openDetails = (): void => {
+  if (longPressTriggered.value) {
+    longPressTriggered.value = false;
+    return;
+  }
+
   emit('openDetails', props.todo.id);
 };
 
@@ -111,18 +190,70 @@ const selectInlineTag = (tag: string): void => {
 const selectClientTag = (tag: string): void => {
   emit('selectClientTag', tag);
 };
+
+const showPinnedIcon = computed(() => (pinPreview.value ?? props.todo.pinned) && !isPinning.value);
+
+const unpinFromIndicator = (): void => {
+  if (!props.todo.pinned || isPinning.value) {
+    return;
+  }
+
+  emit('togglePinned', props.stageId, props.todo.id, false);
+};
+
+onBeforeUnmount(() => {
+  clearHoldTimeout();
+  clearPinTimers();
+});
 </script>
 
 <template>
   <li
-    class="flex cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 shadow-sm transition hover:shadow sm:gap-3 sm:p-3"
+    class="todo-no-swipe swiper-no-swiping relative flex cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 shadow-sm transition hover:shadow sm:gap-3 sm:p-3"
     :class="[timingClass, { 'opacity-50': dragging }]"
     draggable="true"
     @click="openDetails"
+    @pointerdown.stop="startHold"
+    @pointerup.stop="cancelHold"
+    @pointerleave="cancelHold"
+    @pointercancel="cancelHold"
+    @touchstart.stop
+    @touchmove.stop
+    @touchend.stop
     @dragstart="onDragStart"
     @dragover.prevent
     @drop="onDragDrop"
   >
+    <span
+      v-if="showTouchIndicator"
+      class="absolute right-2 top-2 inline-flex h-4 w-4 rounded-full border-2 border-blue-300 bg-blue-100/70 animate-pulse"
+      aria-hidden="true"
+    />
+    <span
+      v-else-if="isPinning"
+      class="absolute right-2 top-2 inline-flex h-4 w-4 items-center justify-center text-amber-600"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 24 24" class="h-4 w-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12a9 9 0 11-6.2-8.56" />
+      </svg>
+    </span>
+    <button
+      v-else-if="todo.pinned"
+      type="button"
+      class="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-amber-600 hover:bg-amber-100"
+      aria-label="Unpin task"
+      title="Unpin"
+      @click.stop="unpinFromIndicator"
+    >
+      <Pin class="h-4 w-4" aria-hidden="true" />
+    </button>
+    <Pin
+      v-else-if="showPinnedIcon"
+      class="absolute right-2 top-2 h-4 w-4 text-amber-600"
+      aria-hidden="true"
+    />
+
     <input
       :id="todo.id"
       type="checkbox"

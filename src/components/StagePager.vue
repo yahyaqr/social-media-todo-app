@@ -25,6 +25,8 @@ const todayStageIndex = computed(() => getTodayStageIndex());
     :slides-per-view="1"
     :space-between="0"
     :initial-slide="todayStageIndex"
+    :no-swiping="true"
+    no-swiping-class="todo-no-swipe"
     class="h-full bg-slate-100"
   >
     <SwiperSlide v-for="(stage, index) in stages" :key="stage.id" class="h-full bg-slate-100">

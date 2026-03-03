@@ -110,6 +110,10 @@ const filteredTodos = computed(() => {
   const list = [...todos.value];
 
   list.sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+      return a.pinned ? -1 : 1;
+    }
+
     const aTag = (a.clientTag ?? '').trim().toLowerCase();
     const bTag = (b.clientTag ?? '').trim().toLowerCase();
 
@@ -296,6 +300,7 @@ const updateDetails = (updates: {
   text?: string;
   dueAt?: number;
   done?: boolean;
+  pinned?: boolean;
   clientTag?: string;
   links?: string[];
   linkCaptions?: string[];
@@ -307,6 +312,10 @@ const updateDetails = (updates: {
   }
 
   store.updateTodo(props.stageId, todo.id, updates);
+};
+
+const togglePinned = (stageId: StageId, todoId: string, pinned: boolean): void => {
+  store.updateTodo(stageId, todoId, { pinned });
 };
 
 const moveSelectedTodo = (direction: -1 | 1): void => {
@@ -394,6 +403,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         @drag-start="onDragStart"
         @drag-drop="onDragDrop"
         @open-details="openDetails"
+        @toggle-pinned="togglePinned"
         @select-inline-tag="setInlineTagFilter"
         @select-client-tag="setClientTagFilter"
       />

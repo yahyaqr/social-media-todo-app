@@ -24,6 +24,7 @@ type TodoDoc = {
   order?: number;
   text?: string;
   done?: boolean;
+  pinned?: boolean;
   createdAt?: number;
   dueAt?: number;
   clientTag?: string;
@@ -83,6 +84,7 @@ const toTodo = (id: string, data: TodoDoc): CloudTodo | null => {
     id,
     text: data.text,
     done: Boolean(data.done),
+    pinned: Boolean(data.pinned),
     createdAt: asTimestamp(data.createdAt) ?? Date.now(),
     dueAt: asTimestamp(data.dueAt),
     clientTag: typeof data.clientTag === 'string' ? data.clientTag : undefined,
@@ -101,6 +103,7 @@ const toTodo = (id: string, data: TodoDoc): CloudTodo | null => {
 const serializeTodo = (todo: Todo, stageId: StageId, order: number) => ({
   text: todo.text,
   done: todo.done,
+  pinned: Boolean(todo.pinned),
   createdAt: todo.createdAt,
   dueAt: typeof todo.dueAt === 'number' ? todo.dueAt : deleteField(),
   clientTag: todo.clientTag ?? deleteField(),

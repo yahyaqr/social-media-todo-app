@@ -154,6 +154,7 @@ export const useTodosStore = defineStore('todos', () => {
       const list = nextTodosByStage[stage.id] ?? [];
       nextTodosByStage[stage.id] = list.map((todo) => ({
         ...todo,
+        pinned: Boolean(todo.pinned),
         links: normalizeLinks(todo.links ?? []),
         linkCaptions: normalizeLinkCaptions(todo.linkCaptions ?? [], todo.links?.length ?? 0),
         clientTag: normalizeClientTag(todo.clientTag),
@@ -232,6 +233,7 @@ export const useTodosStore = defineStore('todos', () => {
       id: createId(),
       text: trimmed,
       done: false,
+      pinned: false,
       createdAt: Date.now(),
       dueAt,
       clientTag: normalizedClientTag,
@@ -260,6 +262,7 @@ export const useTodosStore = defineStore('todos', () => {
       text?: string;
       dueAt?: number;
       done?: boolean;
+      pinned?: boolean;
       clientTag?: string;
       links?: string[];
       linkCaptions?: string[];
@@ -302,6 +305,10 @@ export const useTodosStore = defineStore('todos', () => {
 
     if (updates.done !== undefined) {
       todo.done = updates.done;
+    }
+
+    if (updates.pinned !== undefined) {
+      todo.pinned = updates.pinned;
     }
 
     syncTodoAt(stageId, todoId);
