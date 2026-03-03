@@ -79,6 +79,7 @@ const selectedTodo = computed(() => todos.value.find((todo) => todo.id === selec
 const currentStageIndex = computed(() => stages.findIndex((stage) => stage.id === props.stageId));
 const canUndo = computed(() => currentStageIndex.value > 0);
 const canAdvance = computed(() => currentStageIndex.value >= 0 && currentStageIndex.value < stages.length - 1);
+const canCreateTask = computed(() => store.cloudReady);
 
 const dayBoundaries = () => {
   const now = new Date();
@@ -203,6 +204,10 @@ const parseDate = (value: string): number | undefined => {
 };
 
 const openAddTaskSheet = (): void => {
+  if (!canCreateTask.value) {
+    return;
+  }
+
   isAddTaskSheetOpen.value = true;
 };
 
@@ -233,6 +238,10 @@ const submitFromSheet = (payload: {
   clientTag: string;
   links: string[];
 }): void => {
+  if (!canCreateTask.value) {
+    return;
+  }
+
   store.addTodo(props.stageId, payload.text, parseDate(payload.dueDate), payload.clientTag, payload.links);
 };
 
@@ -340,6 +349,7 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       :visible="isAddTaskSheetOpen"
       :initial-due-date="getNextStageDate(stageId)"
       :client-tags="store.clientTags"
+      :can-submit="canCreateTask"
       @close="closeAddTaskSheet"
       @submit="submitFromSheet"
     />
@@ -412,7 +422,8 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
 
       <button
         type="button"
-        class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98]"
+        class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg transition hover:bg-blue-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+        :disabled="!canCreateTask"
         @click="openAddTaskSheet"
       >
         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
@@ -422,6 +433,12 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
         Add Task
       </button>
     </div>
+    <p
+      v-if="!canCreateTask && !selectedTodo && !isAddTaskSheetOpen"
+      class="fixed bottom-[calc(0.25rem+env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2 text-xs font-medium text-slate-500"
+    >
+      Connecting to cloud sync...
+    </p>
 
     <div v-if="isProfileOpen" class="fixed inset-0 z-30" @click="closeProfile" />
     <section

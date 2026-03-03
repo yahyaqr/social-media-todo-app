@@ -5,6 +5,7 @@ const props = defineProps<{
   visible: boolean;
   initialDueDate: string;
   clientTags: string[];
+  canSubmit: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -75,6 +76,10 @@ const removeLink = (index: number): void => {
 };
 
 const submit = (): void => {
+  if (!props.canSubmit) {
+    return;
+  }
+
   const trimmed = newTodoText.value.trim();
   if (!trimmed) {
     return;
@@ -151,6 +156,7 @@ const selectClientTag = (tag: string): void => {
           type="text"
           placeholder="Add a task..."
           class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
+          :disabled="!canSubmit"
         />
 
         <input
@@ -158,6 +164,7 @@ const selectClientTag = (tag: string): void => {
           type="date"
           class="date-input min-h-12 block w-full max-w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
           aria-label="Due date"
+          :disabled="!canSubmit"
         />
 
         <div class="relative">
@@ -167,6 +174,7 @@ const selectClientTag = (tag: string): void => {
             placeholder="Client tag (optional)"
             class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
             aria-label="Client tag"
+            :disabled="!canSubmit"
             @focus="onClientTagFocus"
             @blur="onClientTagBlur"
             @input="onClientTagInput"
@@ -197,6 +205,7 @@ const selectClientTag = (tag: string): void => {
                 placeholder="Add link (optional)"
                 class="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 pr-12 text-[15px] text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2 sm:px-4 sm:py-3 sm:text-base"
                 aria-label="Add link"
+                :disabled="!canSubmit"
                 @keydown.enter.prevent="appendLink"
               />
               <button
@@ -204,6 +213,7 @@ const selectClientTag = (tag: string): void => {
                 class="absolute right-2 top-1/2 inline-flex h-8 w-12 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-300/70 bg-white/70 text-slate-600 backdrop-blur-sm hover:bg-white/90"
                 aria-label="Paste link"
                 title="Paste link"
+                :disabled="!canSubmit"
                 @click="pasteLinkFromClipboard"
               >
                 <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
@@ -218,6 +228,7 @@ const selectClientTag = (tag: string): void => {
               class="inline-flex min-h-12 min-w-12 items-center justify-center rounded-xl border border-slate-300 px-3 text-slate-700 hover:bg-slate-100"
               aria-label="Add link"
               title="Add link"
+              :disabled="!canSubmit"
               @click="appendLink"
             >
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
@@ -253,7 +264,8 @@ const selectClientTag = (tag: string): void => {
 
         <button
           type="submit"
-          class="min-h-12 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          class="min-h-12 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="!canSubmit"
         >
           Add Task
         </button>

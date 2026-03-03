@@ -114,10 +114,28 @@ export const useTodosStore = defineStore('todos', () => {
   const cloudUid = ref<string | null>(null);
   let cloudUnsubscribe: (() => void) | null = null;
   let cloudInitPromise: Promise<void> | null = null;
+  const pendingCloudWrites: Array<(uid: string) => Promise<void>> = [];
+
+  const flushPendingCloudWrites = (): void => {
+    const uid = cloudUid.value;
+    if (!uid || !pendingCloudWrites.length) {
+      return;
+    }
+
+    const queuedActions = [...pendingCloudWrites];
+    pendingCloudWrites.length = 0;
+
+    for (const action of queuedActions) {
+      void action(uid).catch((error: unknown) => {
+        cloudError.value = error instanceof Error ? error.message : 'Cloud sync failed.';
+      });
+    }
+  };
 
   const runCloudWrite = (action: (uid: string) => Promise<void>): void => {
     const uid = cloudUid.value;
     if (!uid) {
+      pendingCloudWrites.push(action);
       return;
     }
 
@@ -375,6 +393,7 @@ export const useTodosStore = defineStore('todos', () => {
       try {
         const uid = await ensureSignedInUid();
         cloudUid.value = uid;
+        flushPendingCloudWrites();
 
         cloudUnsubscribe = subscribeToCloudState(
           uid,
@@ -407,6 +426,7 @@ export const useTodosStore = defineStore('todos', () => {
     rememberedClientTags.value = [];
     cloudReady.value = false;
     cloudUid.value = null;
+    pendingCloudWrites.length = 0;
   };
 
   return {
