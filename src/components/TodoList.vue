@@ -9,6 +9,8 @@ import TodoItem from './TodoItem.vue';
 type FilterMode = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed';
 const ALL_CLIENT_TAGS = '__all_client_tags__';
 const UNTAGGED_CLIENT_TAG = '__untagged_client_tag__';
+const FILTER_STORAGE_KEY_PREFIX = 'social-todo:filters:';
+const FILTER_MODES: FilterMode[] = ['all', 'today', 'upcoming', 'overdue', 'completed'];
 
 const props = defineProps<{
   stageId: StageId;
@@ -17,8 +19,36 @@ const props = defineProps<{
 const router = useRouter();
 const store = useTodosStore();
 
-const filter = ref<FilterMode>('all');
-const clientTagFilter = ref<string>(ALL_CLIENT_TAGS);
+const getFilterStorageKey = (): string => `${FILTER_STORAGE_KEY_PREFIX}${props.stageId}`;
+
+const loadPersistedFilters = (): { filter: FilterMode; clientTagFilter: string } => {
+  const fallback = { filter: 'all' as FilterMode, clientTagFilter: ALL_CLIENT_TAGS };
+  const raw = window.localStorage.getItem(getFilterStorageKey());
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { filter?: unknown; clientTagFilter?: unknown };
+    const persistedFilter =
+      typeof parsed.filter === 'string' && FILTER_MODES.includes(parsed.filter as FilterMode)
+        ? (parsed.filter as FilterMode)
+        : fallback.filter;
+    const persistedClientTag =
+      typeof parsed.clientTagFilter === 'string' ? parsed.clientTagFilter : fallback.clientTagFilter;
+
+    return {
+      filter: persistedFilter,
+      clientTagFilter: persistedClientTag
+    };
+  } catch {
+    return fallback;
+  }
+};
+
+const persistedFilters = loadPersistedFilters();
+const filter = ref<FilterMode>(persistedFilters.filter);
+const clientTagFilter = ref<string>(persistedFilters.clientTagFilter);
 const inlineTagFilter = ref<string | null>(null);
 const filterOptions: Array<{ value: FilterMode; label: string }> = [
   { value: 'all', label: 'All status' },
@@ -191,6 +221,13 @@ watch(stageClientTags, (tags) => {
   ) {
     clientTagFilter.value = ALL_CLIENT_TAGS;
   }
+});
+
+watch([filter, clientTagFilter], ([nextFilter, nextClientTagFilter]) => {
+  window.localStorage.setItem(
+    getFilterStorageKey(),
+    JSON.stringify({ filter: nextFilter, clientTagFilter: nextClientTagFilter })
+  );
 });
 
 const setClientTagFilter = (tag: string): void => {

@@ -19,9 +19,9 @@ const emit = defineEmits<{
   selectClientTag: [tag: string];
 }>();
 
-const HOLD_DURATION_MS = 500;
-const PIN_SPINNER_SHOW_DELAY_MS = 10;
-const PIN_COMMIT_MS = 50;
+const HOLD_DURATION_MS = 1500;
+const PIN_SPINNER_SHOW_DELAY_MS = 0;
+const PIN_COMMIT_MS = 1500;
 const holdTimeoutId = ref<number | null>(null);
 const pinSpinnerStartTimeoutId = ref<number | null>(null);
 const pinCommitTimeoutId = ref<number | null>(null);

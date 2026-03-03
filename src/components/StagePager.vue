@@ -14,7 +14,7 @@ const authStore = useAuthStore();
 
 const isAddTaskSheetOpen = ref(false);
 const isProfileOpen = ref(false);
-const activeStageIndex = ref(0);
+const STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
 
 const getTodayStageIndex = (): number => {
   const today = new Date().getDay();
@@ -27,7 +27,22 @@ const getTodayStageIndex = (): number => {
 };
 
 const todayStageIndex = computed(() => getTodayStageIndex());
-activeStageIndex.value = todayStageIndex.value;
+
+const getStoredStageIndex = (): number | null => {
+  const raw = window.localStorage.getItem(STAGE_INDEX_STORAGE_KEY);
+  if (raw === null) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed >= stages.length) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const activeStageIndex = ref(getStoredStageIndex() ?? todayStageIndex.value);
 
 const activeStageId = computed<StageId>(() => {
   const stage = stages[activeStageIndex.value];
@@ -71,6 +86,7 @@ const parseDate = (value: string): number | undefined => {
 
 const syncActiveStageIndex = (swiper: { activeIndex?: number; realIndex?: number }): void => {
   activeStageIndex.value = swiper.realIndex ?? swiper.activeIndex ?? 0;
+  window.localStorage.setItem(STAGE_INDEX_STORAGE_KEY, String(activeStageIndex.value));
 };
 
 const openAddTaskSheet = (): void => {
@@ -121,7 +137,7 @@ const signOut = async (): Promise<void> => {
     <Swiper
       :slides-per-view="1"
       :space-between="0"
-      :initial-slide="todayStageIndex"
+      :initial-slide="activeStageIndex"
       :no-swiping="true"
       no-swiping-class="todo-no-swipe"
       class="h-full bg-slate-100"
