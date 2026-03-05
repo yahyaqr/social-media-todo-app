@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { GripHorizontal } from 'lucide-vue-next';
+import Sortable, { type SortableEvent } from 'sortablejs';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTodosStore } from '../stores/todos';
 import { type StageId, type Todo } from '../data/stages';
@@ -59,7 +61,11 @@ const filterOptions: Array<{ value: FilterMode; label: string }> = [
 ];
 
 
-const draggingTodoId = ref<string | null>(null);
+const listElement = ref<HTMLElement | null>(null);
+let sortable: Sortable | null = null;
+const reorderNotice = ref<string | null>(null);
+let reorderNoticeTimeoutId: number | null = null;
+const reorderMode = ref(false);
 
 const todos = computed(() => store.todosByStage[props.stageId]);
 const stageClientTags = computed(() => {
@@ -104,35 +110,7 @@ const extractInlineTags = (todo: Todo): string[] => {
 
 const filteredTodos = computed(() => {
   const { start, end } = dayBoundaries();
-  const list = [...todos.value];
-
-  list.sort((a, b) => {
-    if (Boolean(a.pinned) !== Boolean(b.pinned)) {
-      return a.pinned ? -1 : 1;
-    }
-
-    const aTag = (a.clientTag ?? '').trim().toLowerCase();
-    const bTag = (b.clientTag ?? '').trim().toLowerCase();
-
-    if (aTag && !bTag) {
-      return -1;
-    }
-
-    if (!aTag && bTag) {
-      return 1;
-    }
-
-    if (aTag !== bTag) {
-      return aTag.localeCompare(bTag);
-    }
-
-    const aDue = a.dueAt ?? Number.MAX_SAFE_INTEGER;
-    const bDue = b.dueAt ?? Number.MAX_SAFE_INTEGER;
-    if (aDue !== bDue) {
-      return aDue - bDue;
-    }
-    return b.createdAt - a.createdAt;
-  });
+  const list = todos.value;
 
   if (filter.value === 'today') {
     return list.filter(
@@ -174,6 +152,9 @@ const filteredTodos = computed(() => {
 
   return list.filter((todo) => !todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo));
 });
+const canReorder = computed(() => !inlineTagFilter.value);
+
+const clientTagGroupKey = (todo: Todo): string => (todo.clientTag ?? '').trim().toLowerCase();
 
 const matchesClientTagFilter = (todo: Todo): boolean => {
   if (clientTagFilter.value === ALL_CLIENT_TAGS) {
@@ -238,20 +219,123 @@ const togglePinned = (stageId: StageId, todoId: string, pinned: boolean): void =
   store.updateTodo(stageId, todoId, { pinned });
 };
 
-const onDragStart = (todoId: string) => {
-  draggingTodoId.value = todoId;
-};
-
-const onDragDrop = (targetId: string) => {
-  if (!draggingTodoId.value) {
+const clearReorderNoticeTimeout = (): void => {
+  if (reorderNoticeTimeoutId === null) {
     return;
   }
 
-  store.reorderTodo(props.stageId, draggingTodoId.value, targetId);
-  draggingTodoId.value = null;
+  window.clearTimeout(reorderNoticeTimeoutId);
+  reorderNoticeTimeoutId = null;
 };
 
-const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
+const showReorderNotice = (message: string): void => {
+  reorderNotice.value = message;
+  clearReorderNoticeTimeout();
+  reorderNoticeTimeoutId = window.setTimeout(() => {
+    reorderNotice.value = null;
+    reorderNoticeTimeoutId = null;
+  }, 2200);
+};
+
+const onSortEnd = (event: SortableEvent): void => {
+  if (!canReorder.value || !reorderMode.value) {
+    return;
+  }
+
+  const oldIndex = event.oldIndex;
+  const newIndex = event.newIndex;
+
+  if (oldIndex === undefined || newIndex === undefined || oldIndex === newIndex) {
+    return;
+  }
+
+  const visibleTodos = filteredTodos.value;
+  if (oldIndex < 0 || newIndex < 0 || oldIndex >= visibleTodos.length || newIndex >= visibleTodos.length) {
+    return;
+  }
+
+  const draggedId = visibleTodos[oldIndex]?.id;
+  const targetId = visibleTodos[newIndex]?.id;
+  if (!draggedId || !targetId || draggedId === targetId) {
+    return;
+  }
+
+  if (clientTagFilter.value === ALL_CLIENT_TAGS) {
+    const draggedTodo = visibleTodos[oldIndex];
+    const targetTodo = visibleTodos[newIndex];
+    if (!draggedTodo || !targetTodo) {
+      return;
+    }
+
+    // In "All clients", only allow reorder inside the same client-tag group.
+    if (clientTagGroupKey(draggedTodo) !== clientTagGroupKey(targetTodo)) {
+      showReorderNotice('In All clients, you can reorder only within the same client group.');
+      return;
+    }
+  }
+
+  store.reorderTodo(props.stageId, draggedId, targetId);
+};
+
+const ensureSortable = (): void => {
+  if (!listElement.value || sortable) {
+    return;
+  }
+
+  sortable = Sortable.create(listElement.value, {
+    animation: 150,
+    draggable: '.todo-sort-item',
+    ghostClass: 'todo-sort-ghost',
+    chosenClass: 'todo-sort-chosen',
+    dragClass: 'todo-sort-drag',
+    touchStartThreshold: 4,
+    onEnd: onSortEnd
+  });
+  sortable.option('disabled', !canReorder.value || !reorderMode.value);
+};
+
+const destroySortable = (): void => {
+  if (!sortable) {
+    return;
+  }
+
+  sortable.destroy();
+  sortable = null;
+};
+
+watch(listElement, (element) => {
+  if (!element) {
+    destroySortable();
+    return;
+  }
+
+  ensureSortable();
+});
+
+watch(canReorder, (enabled) => {
+  if (!enabled) {
+    reorderMode.value = false;
+  }
+
+  sortable?.option('disabled', !enabled || !reorderMode.value);
+});
+
+watch(reorderMode, (enabled) => {
+  sortable?.option('disabled', !canReorder.value || !enabled);
+});
+
+const toggleReorderMode = (): void => {
+  if (!canReorder.value) {
+    return;
+  }
+
+  reorderMode.value = !reorderMode.value;
+};
+
+onBeforeUnmount(() => {
+  clearReorderNoticeTimeout();
+  destroySortable();
+});
 </script>
 
 <template>
@@ -285,16 +369,26 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       </button>
     </div>
 
-    <ul v-if="filteredTodos.length" class="mt-3 space-y-3">
+    <p
+      v-if="!canReorder && filteredTodos.length"
+      class="mt-2 rounded-xl bg-white px-3 py-2 text-xs font-medium text-slate-500 ring-1 ring-slate-200"
+    >
+      Reordering is unavailable while inline tag filtering is active.
+    </p>
+
+    <ul
+      ref="listElement"
+      v-if="filteredTodos.length"
+      class="mt-3 space-y-3 select-none"
+      :class="{ 'todo-reorder-mode': reorderMode }"
+    >
       <TodoItem
         v-for="todo in filteredTodos"
         :key="todo.id"
         :stage-id="stageId"
         :todo="todo"
-        :dragging="isDragging(todo)"
+        :reorder-mode="reorderMode"
         @toggle="store.toggleTodo"
-        @drag-start="onDragStart"
-        @drag-drop="onDragDrop"
         @open-details="openDetails"
         @toggle-pinned="togglePinned"
         @select-inline-tag="setInlineTagFilter"
@@ -302,10 +396,39 @@ const isDragging = (todo: Todo) => draggingTodoId.value === todo.id;
       />
     </ul>
 
-    <p v-else class="mt-4 rounded-xl bg-white p-4 text-center text-sm text-slate-500">
+    <div v-if="filteredTodos.length" class="mt-3 flex items-center gap-3">
+      <div class="h-px flex-1 bg-slate-200" aria-hidden="true" />
+      <button
+        type="button"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-full transition"
+        :class="
+          canReorder
+            ? reorderMode
+              ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+            : 'cursor-not-allowed text-slate-300'
+        "
+        :disabled="!canReorder"
+        :aria-label="reorderMode ? 'Done reordering' : 'Start reordering'"
+        :title="reorderMode ? 'Done reordering' : 'Reorder tasks'"
+        @click="toggleReorderMode"
+      >
+        <GripHorizontal class="h-4 w-4" aria-hidden="true" />
+      </button>
+      <div class="h-px flex-1 bg-slate-200" aria-hidden="true" />
+    </div>
+
+    <p
+      v-if="filteredTodos.length && reorderNotice"
+      class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800"
+      role="status"
+      aria-live="polite"
+    >
+      {{ reorderNotice }}
+    </p>
+
+    <p v-else-if="!filteredTodos.length" class="mt-4 rounded-xl bg-white p-4 text-center text-sm text-slate-500">
       No tasks in this filter yet.
     </p>
   </section>
 </template>
-
-

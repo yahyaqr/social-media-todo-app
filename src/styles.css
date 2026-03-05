@@ -62,3 +62,20 @@ textarea {
 .suggestion-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgb(100 116 139);
 }
+
+.todo-sort-ghost {
+  opacity: 0.4;
+}
+
+.todo-sort-chosen {
+  cursor: grabbing;
+}
+
+.todo-sort-drag {
+  transform: rotate(1deg);
+}
+
+.todo-reorder-mode,
+.todo-reorder-mode * {
+  cursor: grab !important;
+}

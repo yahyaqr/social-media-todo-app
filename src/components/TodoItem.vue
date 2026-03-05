@@ -6,13 +6,11 @@ import type { StageId, Todo } from '../data/stages';
 const props = defineProps<{
   stageId: StageId;
   todo: Todo;
-  dragging?: boolean;
+  reorderMode?: boolean;
 }>();
 
 const emit = defineEmits<{
   toggle: [stageId: StageId, todoId: string];
-  dragStart: [todoId: string];
-  dragDrop: [targetId: string];
   openDetails: [todoId: string];
   togglePinned: [stageId: StageId, todoId: string, pinned: boolean];
   selectInlineTag: [tag: string];
@@ -50,6 +48,10 @@ const clearPinTimers = (): void => {
 };
 
 const startHold = (event: PointerEvent): void => {
+  if (props.reorderMode) {
+    return;
+  }
+
   const target = event.target;
   if (target instanceof Element && target.closest('button, a, input, textarea, select, label')) {
     return;
@@ -85,17 +87,57 @@ const cancelHold = (): void => {
   clearHoldTimeout();
 };
 
-const onDragStart = (): void => {
-  cancelHold();
-  clearPinTimers();
-  emit('dragStart', props.todo.id);
+const onPointerDown = (event: PointerEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
+  startHold(event);
 };
 
-const onDragDrop = (): void => {
-  emit('dragDrop', props.todo.id);
+const onPointerUp = (event: PointerEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
+  cancelHold();
+};
+
+const onPointerLeave = (event: PointerEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
+  cancelHold();
+};
+
+const onPointerCancel = (event: PointerEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
+  cancelHold();
+};
+
+const onTouchStart = (event: TouchEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
+};
+
+const onTouchMove = (event: TouchEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
+};
+
+const onTouchEnd = (event: TouchEvent): void => {
+  if (!props.reorderMode) {
+    event.stopPropagation();
+  }
 };
 
 const openDetails = (): void => {
+  if (props.reorderMode) {
+    return;
+  }
+
   if (longPressTriggered.value) {
     longPressTriggered.value = false;
     return;
@@ -205,20 +247,16 @@ onBeforeUnmount(() => {
 
 <template>
   <li
-    class="todo-no-swipe swiper-no-swiping relative flex cursor-pointer items-start gap-2.5 rounded-xl border p-2.5 shadow-sm transition hover:shadow sm:gap-3 sm:p-3"
-    :class="[timingClass, { 'opacity-50': dragging }]"
-    draggable="true"
+    class="todo-no-swipe swiper-no-swiping todo-sort-item relative flex items-start gap-2.5 rounded-xl border p-2.5 shadow-sm transition hover:shadow sm:gap-3 sm:p-3"
+    :class="[timingClass, props.reorderMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer']"
     @click="openDetails"
-    @pointerdown.stop="startHold"
-    @pointerup.stop="cancelHold"
-    @pointerleave="cancelHold"
-    @pointercancel="cancelHold"
-    @touchstart.stop
-    @touchmove.stop
-    @touchend.stop
-    @dragstart="onDragStart"
-    @dragover.prevent
-    @drop="onDragDrop"
+    @pointerdown="onPointerDown"
+    @pointerup="onPointerUp"
+    @pointerleave="onPointerLeave"
+    @pointercancel="onPointerCancel"
+    @touchstart="onTouchStart"
+    @touchmove="onTouchMove"
+    @touchend="onTouchEnd"
   >
     <span
       v-if="isPinning"
@@ -232,7 +270,8 @@ onBeforeUnmount(() => {
     <button
       v-else-if="todo.pinned"
       type="button"
-      class="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 hover:bg-blue-100"
+      :disabled="props.reorderMode"
+      class="absolute right-1.5 top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 hover:bg-blue-100 disabled:opacity-40"
       aria-label="Unpin task"
       title="Unpin"
       @click.stop="unpinFromIndicator"
@@ -249,7 +288,8 @@ onBeforeUnmount(() => {
       :id="todo.id"
       type="checkbox"
       :checked="todo.done"
-      class="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 accent-blue-600"
+      :disabled="props.reorderMode"
+      class="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-300 text-blue-600 accent-blue-600 disabled:opacity-40"
       @click.stop
       @change="emit('toggle', stageId, todo.id)"
     />
@@ -291,7 +331,8 @@ onBeforeUnmount(() => {
         <button
           v-if="todo.clientTag"
           type="button"
-          class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 hover:bg-slate-200"
+          :disabled="props.reorderMode"
+          class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 hover:bg-slate-200 disabled:opacity-40"
           @click.stop="selectClientTag(todo.clientTag)"
         >
           {{ todo.clientTag }}
@@ -302,6 +343,7 @@ onBeforeUnmount(() => {
           target="_blank"
           rel="noopener noreferrer"
           class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100"
+          :class="props.reorderMode ? 'pointer-events-none opacity-40' : ''"
           @click.stop
         >
           Open link
@@ -313,8 +355,12 @@ onBeforeUnmount(() => {
           v-for="(tag, index) in inlineTags"
           :key="`${tag}-${index}`"
           type="button"
+          :disabled="props.reorderMode"
           class="rounded-full px-2 py-0.5"
-          :class="tag.startsWith('@') ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'"
+          :class="[
+            tag.startsWith('@') ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700',
+            { 'opacity-40': props.reorderMode }
+          ]"
           @click.stop="selectInlineTag(tag)"
         >
           {{ tag }}
