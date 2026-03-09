@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import ContentIdeationPage from '../components/ContentIdeationPage.vue';
 import StagePager from '../components/StagePager.vue';
 import TaskDetailPage from '../components/TaskDetailPage.vue';
 
@@ -14,6 +15,11 @@ const router = createRouter({
       path: '/task/:stageId/:todoId',
       name: 'task-detail',
       component: TaskDetailPage
+    },
+    {
+      path: '/content-ideation',
+      name: 'content-ideation',
+      component: ContentIdeationPage
     }
   ]
 });
