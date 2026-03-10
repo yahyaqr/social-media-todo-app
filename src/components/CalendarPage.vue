@@ -38,7 +38,7 @@ const monthSurfaceRef = ref<HTMLElement | null>(null);
 const calendarViewportRef = ref<HTMLDivElement | null>(null);
 const isDownloadingImage = ref(false);
 const CALENDAR_WHEEL_SCROLL_MULTIPLIER = 2.75;
-const CALENDAR_SCROLLBAR_HEIGHT = 14;
+const CALENDAR_SCROLLBAR_HEIGHT = 28;
 const calendarScrollMetrics = ref({
   clientWidth: 0,
   scrollWidth: 0,
@@ -533,7 +533,7 @@ onBeforeUnmount(() => {
       <BasicDropdown v-model="clientTagFilter" class="w-1/2" :options="clientTagOptions" label="Client tag" />
     </div>
 
-    <section class="mt-3 bg-white shadow-sm ring-1 ring-slate-200">
+    <section class="mt-3 bg-white rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200">
       <div
         ref="monthHeaderRef"
         class="calendar-header-row grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 border-b border-slate-200 px-3 py-3 sm:px-4"
@@ -657,7 +657,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="mt-3 bg-white p-3 shadow-sm ring-1 ring-slate-200 sm:p-4">
+    <section class="mt-3 bg-white p-3 rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200 sm:p-4">
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Selected day</p>
@@ -748,7 +748,7 @@ onBeforeUnmount(() => {
 }
 
 .calendar-grid-width {
-  width: 100rem;
+  width: 70rem;
 }
 
 .calendar-day-cell {
