@@ -32,6 +32,7 @@ const stageFilter = ref<'all' | StageId>('all');
 const clientTagFilter = ref<string>(ALL_CLIENT_TAGS);
 const visibleMonth = ref(startOfMonth(new Date()));
 const selectedDateKey = ref(toDateKey(new Date()));
+const monthHeaderRef = ref<HTMLElement | null>(null);
 const monthSurfaceRef = ref<HTMLElement | null>(null);
 const isDownloadingImage = ref(false);
 
@@ -268,16 +269,19 @@ const waitForNextFrame = async (): Promise<void> => {
 };
 
 const downloadCalendarImage = async (): Promise<void> => {
-  if (!monthSurfaceRef.value || isDownloadingImage.value) {
+  if (!monthHeaderRef.value || !monthSurfaceRef.value || isDownloadingImage.value) {
     return;
   }
 
   isDownloadingImage.value = true;
 
   try {
-    const source = monthSurfaceRef.value;
+    const headerSource = monthHeaderRef.value;
+    const gridSource = monthSurfaceRef.value;
     const exportHost = document.createElement('div');
-    const exportNode = source.cloneNode(true) as HTMLElement;
+    const exportNode = document.createElement('section');
+    const exportHeader = headerSource.cloneNode(true) as HTMLElement;
+    const exportGrid = gridSource.cloneNode(true) as HTMLElement;
     exportHost.style.position = 'fixed';
     exportHost.style.left = '0';
     exportHost.style.top = '0';
@@ -287,13 +291,26 @@ const downloadCalendarImage = async (): Promise<void> => {
     exportHost.style.overflow = 'visible';
     exportHost.style.background = '#ffffff';
     exportHost.dataset.calendarExportClone = 'true';
-    exportNode.style.width = `${source.scrollWidth}px`;
-    exportNode.style.minWidth = `${source.scrollWidth}px`;
+    const hasExportFilters = activeExportFilters.value.length > 0;
+    exportNode.style.width = `${gridSource.scrollWidth}px`;
+    exportNode.style.minWidth = `${gridSource.scrollWidth}px`;
     exportNode.style.maxWidth = 'none';
-    exportNode.style.height = `${source.scrollHeight}px`;
+    exportNode.style.height = 'auto';
     exportNode.style.overflow = 'visible';
     exportNode.style.background = '#ffffff';
     exportNode.style.boxSizing = 'border-box';
+    exportNode.style.border = '1px solid rgb(226 232 240)';
+    if (!hasExportFilters) {
+      exportNode.dataset.exportHeaderCompact = 'true';
+    }
+    exportHeader.style.width = `${gridSource.scrollWidth}px`;
+    exportHeader.style.minWidth = `${gridSource.scrollWidth}px`;
+    exportHeader.style.maxWidth = 'none';
+    exportGrid.style.width = `${gridSource.scrollWidth}px`;
+    exportGrid.style.minWidth = `${gridSource.scrollWidth}px`;
+    exportGrid.style.maxWidth = 'none';
+    exportNode.appendChild(exportHeader);
+    exportNode.appendChild(exportGrid);
     exportHost.appendChild(exportNode);
     document.body.appendChild(exportHost);
 
@@ -304,13 +321,13 @@ const downloadCalendarImage = async (): Promise<void> => {
       cacheBust: true,
       backgroundColor: '#ffffff',
       pixelRatio: Math.max(2, window.devicePixelRatio || 1),
-      width: source.scrollWidth,
-      height: source.scrollHeight,
-      canvasWidth: source.scrollWidth,
-      canvasHeight: source.scrollHeight,
+      width: gridSource.scrollWidth,
+      height: exportNode.scrollHeight,
+      canvasWidth: gridSource.scrollWidth,
+      canvasHeight: exportNode.scrollHeight,
       style: {
-        width: `${source.scrollWidth}px`,
-        height: `${source.scrollHeight}px`
+        width: `${gridSource.scrollWidth}px`,
+        height: `${exportNode.scrollHeight}px`
       }
     });
     document.body.removeChild(exportHost);
@@ -352,52 +369,55 @@ watch(visibleMonth, (month) => {
     </div>
 
     <section class="mt-3 bg-white shadow-sm ring-1 ring-slate-200">
+      <div
+        ref="monthHeaderRef"
+        class="calendar-header-row grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 border-b border-slate-200 px-3 py-3 sm:px-4"
+      >
+        <button
+          type="button"
+          class="calendar-nav-control inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
+          aria-label="Previous month"
+          @click="goToPreviousMonth"
+        >
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+
+        <div class="calendar-header-content min-w-0 text-center">
+          <p class="calendar-month-title truncate text-lg font-semibold text-slate-900">{{ monthLabel }}</p>
+          <button
+            type="button"
+            class="calendar-jump-today mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+            @click="goToToday"
+          >
+            Jump to today
+          </button>
+          <div v-if="activeExportFilters.length" class="calendar-export-filters mt-1 hidden">
+            <p
+              v-for="filterLabel in activeExportFilters"
+              :key="filterLabel"
+              class="text-xs font-medium text-slate-500"
+            >
+              {{ filterLabel }}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="calendar-nav-control inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
+          aria-label="Next month"
+          @click="goToNextMonth"
+        >
+          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+
       <div class="overflow-x-auto overscroll-x-contain">
         <div ref="monthSurfaceRef" class="calendar-grid-width bg-white">
-          <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-3 sm:px-4">
-            <button
-              type="button"
-              class="calendar-nav-control inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
-              aria-label="Previous month"
-              @click="goToPreviousMonth"
-            >
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M15 18l-6-6 6-6" />
-              </svg>
-            </button>
-
-            <div class="min-w-0 text-center">
-              <p class="truncate text-lg font-semibold text-slate-900">{{ monthLabel }}</p>
-              <button
-                type="button"
-                class="calendar-jump-today mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
-                @click="goToToday"
-              >
-                Jump to today
-              </button>
-              <div v-if="activeExportFilters.length" class="calendar-export-filters mt-1 hidden">
-                <p
-                  v-for="filterLabel in activeExportFilters"
-                  :key="filterLabel"
-                  class="text-xs font-medium text-slate-500"
-                >
-                  {{ filterLabel }}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              class="calendar-nav-control inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
-              aria-label="Next month"
-              @click="goToNextMonth"
-            >
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 6l6 6-6 6" />
-              </svg>
-            </button>
-          </div>
-
           <div class="grid grid-cols-7 gap-px border-b border-slate-200 bg-slate-200 px-px pt-px">
             <div
               v-for="label in weekdayLabels"
@@ -413,7 +433,7 @@ watch(visibleMonth, (month) => {
               v-for="day in visibleDays"
               :key="day.key"
               type="button"
-              class="calendar-day-cell bg-white px-1.5 py-1.5 text-left align-top transition active:scale-[0.99] sm:px-2 sm:py-2"
+              class="calendar-day-cell calendar-day-selectable bg-white px-1.5 py-1.5 text-left align-top transition active:scale-[0.99] sm:px-2 sm:py-2"
               :class="[
                 day.isCurrentMonth ? 'text-slate-900' : 'bg-slate-50 text-slate-400',
                 selectedDateKey === day.key ? 'ring-2 ring-inset ring-blue-500' : '',
@@ -441,7 +461,7 @@ watch(visibleMonth, (month) => {
                   v-for="task in day.tasks.slice(0, 2)"
                   :key="task.todoId"
                   type="button"
-                  class="rounded-xl border px-1.5 py-1 text-[10px] font-medium leading-3 sm:px-2 sm:text-[11px]"
+                  class="w-full rounded-xl border px-1.5 py-1 text-[10px] font-medium leading-3 sm:px-2 sm:text-[11px]"
                   :class="[dayAccentClass(task.stageId), task.done ? 'opacity-60 line-through' : '']"
                   @click.stop="openTask(task)"
                 >
@@ -561,8 +581,36 @@ watch(visibleMonth, (month) => {
   display: block;
 }
 
+[data-calendar-export-clone='true'] .calendar-header-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 3rem;
+  text-align: center;
+}
+
+[data-calendar-export-clone='true'] .calendar-header-row {
+  position: relative;
+}
+
+[data-calendar-export-clone='true'] [data-export-header-compact='true'] .calendar-header-content {
+  min-height: 3.75rem;
+}
+
+[data-calendar-export-clone='true'] [data-export-header-compact='true'] .calendar-month-title {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
 [data-calendar-export-clone='true'] .calendar-day-number {
   background: transparent !important;
   color: inherit !important;
+}
+
+[data-calendar-export-clone='true'] .calendar-day-selectable {
+  box-shadow: none !important;
 }
 </style>
