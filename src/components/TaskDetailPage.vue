@@ -9,7 +9,9 @@ import FullContentEditor from './FullContentEditor.vue';
 const route = useRoute();
 const router = useRouter();
 const store = useTodosStore();
-const STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
+const LEGACY_STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
+const SLIDE_INDEX_STORAGE_KEY = 'social-todo:active-slide-index';
+const FIRST_STAGE_SLIDE_INDEX = 1;
 
 const detailTitle = ref('');
 const detailDueDate = ref('');
@@ -350,7 +352,8 @@ const moveTodo = (direction: -1 | 1): void => {
   if (moved) {
     // After stage transition, return to the destination stage page instead of
     // staying on a task route that can be stale during cloud listener updates.
-    window.localStorage.setItem(STAGE_INDEX_STORAGE_KEY, String(nextIndex));
+    window.localStorage.setItem(LEGACY_STAGE_INDEX_STORAGE_KEY, String(nextIndex));
+    window.localStorage.setItem(SLIDE_INDEX_STORAGE_KEY, String(nextIndex + FIRST_STAGE_SLIDE_INDEX));
     void router.replace({ name: 'home' });
   }
 };

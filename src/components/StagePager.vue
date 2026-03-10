@@ -3,9 +3,11 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { stages, type StageId } from '../data/stages';
+import { getDefaultClientTagFromFilter, loadPersistedFilters } from '../lib/taskFilters';
 import { useAuthStore } from '../stores/auth';
 import { useTodosStore } from '../stores/todos';
 import AddTaskSheet from './AddTaskSheet.vue';
+import CalendarPage from './CalendarPage.vue';
 import StagePage from './StagePage.vue';
 
 import 'swiper/css';
@@ -16,7 +18,10 @@ const router = useRouter();
 
 const isAddTaskSheetOpen = ref(false);
 const isProfileOpen = ref(false);
-const STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
+const LEGACY_STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
+const SLIDE_INDEX_STORAGE_KEY = 'social-todo:active-slide-index';
+const CALENDAR_SLIDE_INDEX = 0;
+const FIRST_STAGE_SLIDE_INDEX = 1;
 
 const getTodayStageIndex = (): number => {
   const today = new Date().getDay();
@@ -30,26 +35,45 @@ const getTodayStageIndex = (): number => {
 
 const todayStageIndex = computed(() => getTodayStageIndex());
 
-const getStoredStageIndex = (): number | null => {
-  const raw = window.localStorage.getItem(STAGE_INDEX_STORAGE_KEY);
+const readStoredIndex = (storageKey: string, maxExclusive: number): number | null => {
+  const raw = window.localStorage.getItem(storageKey);
   if (raw === null) {
     return null;
   }
 
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed >= stages.length) {
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed >= maxExclusive) {
     return null;
   }
 
   return parsed;
 };
 
-const activeStageIndex = ref(getStoredStageIndex() ?? todayStageIndex.value);
+const getStoredSlideIndex = (): number | null => {
+  const current = readStoredIndex(SLIDE_INDEX_STORAGE_KEY, stages.length + FIRST_STAGE_SLIDE_INDEX);
+  if (current !== null) {
+    return current;
+  }
+
+  const legacyStageIndex = readStoredIndex(LEGACY_STAGE_INDEX_STORAGE_KEY, stages.length);
+  if (legacyStageIndex !== null) {
+    return legacyStageIndex + FIRST_STAGE_SLIDE_INDEX;
+  }
+
+  return null;
+};
+
+const activeSlideIndex = ref(getStoredSlideIndex() ?? todayStageIndex.value + FIRST_STAGE_SLIDE_INDEX);
+const activeStageIndex = computed(() => Math.max(0, activeSlideIndex.value - FIRST_STAGE_SLIDE_INDEX));
+const isCalendarSlideActive = computed(() => activeSlideIndex.value === CALENDAR_SLIDE_INDEX);
 
 const activeStageId = computed<StageId>(() => {
   const stage = stages[activeStageIndex.value];
   return stage?.id ?? stages[0].id;
 });
+const defaultClientTagForNewTask = computed(() =>
+  getDefaultClientTagFromFilter(loadPersistedFilters(activeStageId.value).clientTagFilter)
+);
 
 const canCreateTask = computed(() => store.cloudReady);
 
@@ -87,8 +111,8 @@ const parseDate = (value: string): number | undefined => {
 };
 
 const syncActiveStageIndex = (swiper: { activeIndex?: number; realIndex?: number }): void => {
-  activeStageIndex.value = swiper.realIndex ?? swiper.activeIndex ?? 0;
-  window.localStorage.setItem(STAGE_INDEX_STORAGE_KEY, String(activeStageIndex.value));
+  activeSlideIndex.value = swiper.realIndex ?? swiper.activeIndex ?? FIRST_STAGE_SLIDE_INDEX;
+  window.localStorage.setItem(SLIDE_INDEX_STORAGE_KEY, String(activeSlideIndex.value));
 };
 
 const openAddTaskSheet = (): void => {
@@ -144,7 +168,7 @@ const signOut = async (): Promise<void> => {
     <Swiper
       :slides-per-view="1"
       :space-between="0"
-      :initial-slide="activeStageIndex"
+      :initial-slide="activeSlideIndex"
       :no-swiping="true"
       no-swiping-class="todo-no-swipe"
       class="h-full bg-slate-100"
@@ -153,6 +177,9 @@ const signOut = async (): Promise<void> => {
       @activeIndexChange="syncActiveStageIndex"
       @realIndexChange="syncActiveStageIndex"
     >
+      <SwiperSlide class="h-full bg-slate-100">
+        <CalendarPage />
+      </SwiperSlide>
       <SwiperSlide v-for="(stage, index) in stages" :key="stage.id" class="h-full bg-slate-100">
         <StagePage :stage="stage" :index="index" :total-stages="stages.length" :is-today="index === todayStageIndex" />
       </SwiperSlide>
@@ -161,6 +188,7 @@ const signOut = async (): Promise<void> => {
     <AddTaskSheet
       :visible="isAddTaskSheetOpen"
       :initial-due-date="getNextStageDate(activeStageId)"
+      :initial-client-tag="defaultClientTagForNewTask"
       :client-tags="store.clientTags"
       :can-submit="canCreateTask"
       @close="closeAddTaskSheet"
@@ -168,7 +196,7 @@ const signOut = async (): Promise<void> => {
     />
 
     <div
-      v-if="!isAddTaskSheetOpen"
+      v-if="!isAddTaskSheetOpen && !isCalendarSlideActive"
       class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex w-full -translate-x-1/2 items-center justify-between gap-2 px-4"
     >
       <button

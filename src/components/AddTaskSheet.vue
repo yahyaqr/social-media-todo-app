@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 const props = defineProps<{
   visible: boolean;
   initialDueDate: string;
+  initialClientTag: string;
   clientTags: string[];
   canSubmit: boolean;
 }>();
@@ -28,6 +29,7 @@ watch(
     }
 
     dueDate.value = props.initialDueDate;
+    clientTag.value = props.initialClientTag;
   }
 );
 
