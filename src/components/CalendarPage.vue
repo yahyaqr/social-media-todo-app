@@ -387,14 +387,6 @@ const waitForNextFrame = async (): Promise<void> => {
   });
 };
 
-const isIosSafari = (): boolean => {
-  const userAgent = window.navigator.userAgent;
-  const isIosDevice = /iP(ad|hone|od)/i.test(userAgent);
-  const isWebkit = /WebKit/i.test(userAgent);
-  const isExcludedBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|YaBrowser/i.test(userAgent);
-  return isIosDevice && isWebkit && !isExcludedBrowser;
-};
-
 const downloadCalendarImage = async (): Promise<void> => {
   if (!monthHeaderRef.value || !monthSurfaceRef.value || isDownloadingImage.value) {
     return;
@@ -454,27 +446,6 @@ const downloadCalendarImage = async (): Promise<void> => {
     const link = document.createElement('a');
     const monthKey = `${visibleMonth.value.getFullYear()}-${String(visibleMonth.value.getMonth() + 1).padStart(2, '0')}`;
     const fileName = `calendar-${monthKey}.png`;
-
-    if (isIosSafari()) {
-      const previewWindow = window.open('', '_blank');
-      if (previewWindow) {
-        previewWindow.document.title = fileName;
-        previewWindow.document.body.style.margin = '0';
-        previewWindow.document.body.style.background = '#111827';
-        previewWindow.document.body.innerHTML = `
-          <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;box-sizing:border-box;">
-            <p style="margin:0;color:#e5e7eb;font:600 16px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;">
-              Tap and hold the image to save or share it.
-            </p>
-            <img src="${dataUrl}" alt="Calendar export" style="display:block;max-width:100%;height:auto;background:#fff;" />
-          </div>
-        `;
-        return;
-      }
-
-      window.location.href = dataUrl;
-      return;
-    }
 
     link.download = fileName;
     link.href = dataUrl;
