@@ -505,7 +505,7 @@ watch(visibleMonth, (month) => {
               v-for="day in visibleDays"
               :key="day.key"
               type="button"
-              class="calendar-day-cell calendar-day-selectable bg-white px-1.5 py-1.5 text-left align-top transition active:scale-[0.99] sm:px-2 sm:py-2"
+              class="calendar-day-cell calendar-day-selectable flex h-full flex-col bg-white px-1.5 py-1.5 text-left align-top transition active:scale-[0.99] sm:px-2 sm:py-2"
               :class="[
                 day.isCurrentMonth ? 'text-slate-900' : 'bg-slate-50 text-slate-400',
                 selectedDateKey === day.key ? 'ring-2 ring-inset ring-blue-500' : '',
@@ -513,38 +513,40 @@ watch(visibleMonth, (month) => {
               ]"
               @click="selectDay(day)"
             >
-              <div class="flex items-center justify-between gap-1">
-                <span
-                  class="calendar-day-number inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold sm:h-8 sm:w-8"
-                  :class="day.isToday ? 'bg-slate-900 text-white' : 'bg-transparent text-current'"
-                >
-                  {{ day.date.getDate() }}
-                </span>
-                <span
-                  v-if="day.tasks.length"
-                  class="text-[10px] font-semibold uppercase tracking-wide text-slate-400"
-                >
-                  {{ day.tasks.length }}
-                </span>
-              </div>
+              <div class="flex h-full flex-col">
+                <div class="flex items-start justify-between gap-1">
+                  <span
+                    class="calendar-day-number inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full pt-0.5 text-xs font-semibold sm:h-8 sm:w-8"
+                    :class="day.isToday ? 'bg-slate-900 text-white' : 'bg-transparent text-current'"
+                  >
+                    {{ day.date.getDate() }}
+                  </span>
+                  <span
+                    v-if="day.tasks.length"
+                    class="calendar-day-number inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
+                  >
+                    {{ day.tasks.length }}
+                  </span>
+                </div>
 
-              <div class="mt-1.5 space-y-1">
-                <button
-                  v-for="task in day.tasks.slice(0, 2)"
-                  :key="task.todoId"
-                  type="button"
-                  class="w-full rounded-xl border px-1.5 py-1 text-[10px] font-medium leading-3 sm:px-2 sm:text-[11px]"
-                  :class="[dayAccentClass(task.stageId), task.done ? 'opacity-60 line-through' : '']"
-                  @click.stop="openTask(task)"
-                >
-                  {{ task.title }}
-                </button>
+                <div class="mt-1.5 space-y-1">
+                  <button
+                    v-for="task in day.tasks.slice(0, 2)"
+                    :key="task.todoId"
+                    type="button"
+                    class="w-full rounded-xl border px-1.5 py-1 text-[10px] font-medium leading-3 sm:px-2 sm:text-[11px]"
+                    :class="[dayAccentClass(task.stageId), task.done ? 'opacity-60 line-through' : '']"
+                    @click.stop="openTask(task)"
+                  >
+                    {{ task.title }}
+                  </button>
 
-                <div
-                  v-if="day.tasks.length > 2"
-                  class="rounded-xl border border-dashed border-slate-300 px-1.5 py-1 text-[10px] font-semibold text-slate-500 sm:px-2 sm:text-[11px]"
-                >
-                  +{{ day.tasks.length - 2 }} more
+                  <div
+                    v-if="day.tasks.length > 2"
+                    class="rounded-xl border border-dashed border-slate-300 px-1.5 py-1 text-[10px] font-semibold text-slate-500 sm:px-2 sm:text-[11px]"
+                  >
+                    +{{ day.tasks.length - 2 }} more
+                  </div>
                 </div>
               </div>
             </button>
