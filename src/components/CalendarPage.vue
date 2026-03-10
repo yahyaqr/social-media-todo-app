@@ -38,7 +38,7 @@ const monthSurfaceRef = ref<HTMLElement | null>(null);
 const calendarViewportRef = ref<HTMLDivElement | null>(null);
 const isDownloadingImage = ref(false);
 const CALENDAR_WHEEL_SCROLL_MULTIPLIER = 2.75;
-const CALENDAR_SCROLLBAR_HEIGHT = 28;
+const CALENDAR_SCROLLBAR_HEIGHT = 42;
 const calendarScrollMetrics = ref({
   clientWidth: 0,
   scrollWidth: 0,

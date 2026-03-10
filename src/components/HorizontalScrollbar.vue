@@ -194,9 +194,15 @@ onBeforeUnmount(() => {
 <style scoped>
 .horizontal-scrollbar {
   position: relative;
-  border-radius: 9999px;
   background-color: rgb(226 232 240);
   touch-action: none;
+  opacity: 0.75;
+  transition: opacity 160ms ease;
+}
+
+.horizontal-scrollbar:hover,
+.horizontal-scrollbar--active {
+  opacity: 1;
 }
 
 .horizontal-scrollbar__thumb {
@@ -204,8 +210,8 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   height: 100%;
-  border-radius: 9999px;
-  background-color: rgb(148 163 184);
+  border-radius: 4px;
+  background-color: rgb(208, 215, 224);
   cursor: grab;
 }
 </style>
