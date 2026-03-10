@@ -83,6 +83,7 @@ const clientTagFilterOptions = computed<Array<{ value: string; label: string }>>
   { value: UNTAGGED_CLIENT_TAG, label: 'No client tag' },
   ...stageClientTags.value.map((tag) => ({ value: tag, label: tag }))
 ]);
+const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
 
 const dayBoundaries = () => {
   const now = new Date();
@@ -108,12 +109,42 @@ const extractInlineTags = (todo: Todo): string[] => {
   return [...new Set(matches)];
 };
 
+const sortVisibleTodos = (list: Todo[]): Todo[] => {
+  return [...list].sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+      return a.pinned ? -1 : 1;
+    }
+
+    if (clientTagFilter.value !== ALL_CLIENT_TAGS) {
+      return 0;
+    }
+
+    const aTag = a.clientTag?.trim() ?? '';
+    const bTag = b.clientTag?.trim() ?? '';
+
+    if (!aTag && bTag) {
+      return 1;
+    }
+
+    if (aTag && !bTag) {
+      return -1;
+    }
+
+    const tagComparison = collator.compare(aTag, bTag);
+    if (tagComparison !== 0) {
+      return tagComparison;
+    }
+
+    return 0;
+  });
+};
+
 const filteredTodos = computed(() => {
   const { start, end } = dayBoundaries();
   const list = todos.value;
 
   if (filter.value === 'today') {
-    return list.filter(
+    return sortVisibleTodos(list.filter(
       (todo) =>
         !todo.done &&
         todo.dueAt !== undefined &&
@@ -121,36 +152,40 @@ const filteredTodos = computed(() => {
         todo.dueAt < end &&
         matchesClientTagFilter(todo) &&
         matchesInlineTagFilter(todo)
-    );
+    ));
   }
 
   if (filter.value === 'upcoming') {
-    return list.filter(
+    return sortVisibleTodos(list.filter(
       (todo) =>
         !todo.done &&
         todo.dueAt !== undefined &&
         todo.dueAt >= end &&
         matchesClientTagFilter(todo) &&
         matchesInlineTagFilter(todo)
-    );
+    ));
   }
 
   if (filter.value === 'overdue') {
-    return list.filter(
+    return sortVisibleTodos(list.filter(
       (todo) =>
         todo.dueAt !== undefined &&
         todo.dueAt < start &&
         !todo.done &&
         matchesClientTagFilter(todo) &&
         matchesInlineTagFilter(todo)
-    );
+    ));
   }
 
   if (filter.value === 'completed') {
-    return list.filter((todo) => todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo));
+    return sortVisibleTodos(
+      list.filter((todo) => todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo))
+    );
   }
 
-  return list.filter((todo) => !todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo));
+  return sortVisibleTodos(
+    list.filter((todo) => !todo.done && matchesClientTagFilter(todo) && matchesInlineTagFilter(todo))
+  );
 });
 const canReorder = computed(() => !inlineTagFilter.value);
 
