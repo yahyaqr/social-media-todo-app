@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import CustomScrollbar from 'custom-vue-scrollbar';
-import 'custom-vue-scrollbar/dist/style.css';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { toPng } from 'html-to-image';
 import { useRouter } from 'vue-router';
 import { stages, type StageId, type Todo } from '../data/stages';
 import { ALL_CLIENT_TAGS, UNTAGGED_CLIENT_TAG } from '../lib/taskFilters';
 import { useTodosStore } from '../stores/todos';
 import BasicDropdown from './BasicDropdown.vue';
+import HorizontalScrollbar from './HorizontalScrollbar.vue';
 
 type CalendarTask = {
   stageId: StageId;
@@ -36,9 +35,17 @@ const visibleMonth = ref(startOfMonth(new Date()));
 const selectedDateKey = ref(toDateKey(new Date()));
 const monthHeaderRef = ref<HTMLElement | null>(null);
 const monthSurfaceRef = ref<HTMLElement | null>(null);
-const calendarScrollbarRef = ref<{ scrollEl: HTMLDivElement } | null>(null);
+const calendarViewportRef = ref<HTMLDivElement | null>(null);
 const isDownloadingImage = ref(false);
 const CALENDAR_WHEEL_SCROLL_MULTIPLIER = 2.75;
+const CALENDAR_SCROLLBAR_HEIGHT = 14;
+const calendarScrollMetrics = ref({
+  clientWidth: 0,
+  scrollWidth: 0,
+  scrollLeft: 0
+});
+
+let calendarResizeObserver: ResizeObserver | null = null;
 
 const stageOptions = [
   { value: 'all', label: 'All stages' },
@@ -218,8 +225,42 @@ const selectedDay = computed<CalendarDay | null>(() => {
   return visibleDays.value.find((day) => day.key === selectedDateKey.value) ?? null;
 });
 
+const syncCalendarScrollMetrics = (): void => {
+  const viewport = calendarViewportRef.value;
+
+  if (!viewport) {
+    calendarScrollMetrics.value = {
+      clientWidth: 0,
+      scrollWidth: 0,
+      scrollLeft: 0
+    };
+    return;
+  }
+
+  calendarScrollMetrics.value = {
+    clientWidth: viewport.clientWidth,
+    scrollWidth: viewport.scrollWidth,
+    scrollLeft: viewport.scrollLeft
+  };
+};
+
+const scrollCalendarTo = (left: number): void => {
+  const viewport = calendarViewportRef.value;
+
+  if (!viewport) {
+    return;
+  }
+
+  viewport.scrollLeft = Math.max(0, Math.min(left, viewport.scrollWidth - viewport.clientWidth));
+  syncCalendarScrollMetrics();
+};
+
+const handleCalendarScroll = (): void => {
+  syncCalendarScrollMetrics();
+};
+
 const handleCalendarWheel = (event: WheelEvent): void => {
-  const scrollEl = calendarScrollbarRef.value?.scrollEl;
+  const scrollEl = calendarViewportRef.value;
 
   if (!scrollEl || scrollEl.scrollWidth <= scrollEl.clientWidth) {
     return;
@@ -233,6 +274,7 @@ const handleCalendarWheel = (event: WheelEvent): void => {
 
   event.preventDefault();
   scrollEl.scrollLeft += dominantDelta * CALENDAR_WHEEL_SCROLL_MULTIPLIER;
+  syncCalendarScrollMetrics();
 };
 
 const stageBadgeClass = (stageId: StageId): string => {
@@ -460,12 +502,27 @@ watch(visibleMonth, (month) => {
   selectedDateKey.value = firstVisibleTaskDay ?? monthStartKey;
 }, { immediate: true });
 
-onMounted(() => {
-  calendarScrollbarRef.value?.scrollEl.addEventListener('wheel', handleCalendarWheel, { passive: false });
+watch([visibleMonth, allFilteredTasks], async () => {
+  await nextTick();
+  syncCalendarScrollMetrics();
+});
+
+onMounted(async () => {
+  await nextTick();
+  syncCalendarScrollMetrics();
+
+  if (calendarViewportRef.value && monthSurfaceRef.value) {
+    calendarResizeObserver = new ResizeObserver(() => {
+      syncCalendarScrollMetrics();
+    });
+    calendarResizeObserver.observe(calendarViewportRef.value);
+    calendarResizeObserver.observe(monthSurfaceRef.value);
+  }
 });
 
 onBeforeUnmount(() => {
-  calendarScrollbarRef.value?.scrollEl.removeEventListener('wheel', handleCalendarWheel);
+  calendarResizeObserver?.disconnect();
+  calendarResizeObserver = null;
 });
 </script>
 
@@ -524,16 +581,14 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <CustomScrollbar
-        ref="calendarScrollbarRef"
-        class="calendar-scrollbar"
-        :auto-hide="false"
-        :auto-expand="true"
-        :thumb-width="48"
-        wrapper-class="calendar-scrollbar__wrapper"
-        content-class="calendar-scrollbar__content"
-      >
-        <div ref="monthSurfaceRef" class="calendar-grid-width bg-white">
+      <div class="calendar-scrollbar-shell">
+        <div
+          ref="calendarViewportRef"
+          class="calendar-scrollbar-viewport"
+          @scroll="handleCalendarScroll"
+          @wheel="handleCalendarWheel"
+        >
+          <div ref="monthSurfaceRef" class="calendar-grid-width bg-white">
           <div class="grid grid-cols-7 gap-px border-b border-slate-200 bg-slate-200 px-px pt-px">
             <div
               v-for="label in weekdayLabels"
@@ -590,7 +645,16 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-      </CustomScrollbar>
+        </div>
+
+        <HorizontalScrollbar
+          :client-width="calendarScrollMetrics.clientWidth"
+          :scroll-width="calendarScrollMetrics.scrollWidth"
+          :scroll-left="calendarScrollMetrics.scrollLeft"
+          :height="CALENDAR_SCROLLBAR_HEIGHT"
+          @scroll-to="scrollCalendarTo"
+        />
+      </div>
     </section>
 
     <section class="mt-3 bg-white p-3 shadow-sm ring-1 ring-slate-200 sm:p-4">
@@ -667,30 +731,28 @@ onBeforeUnmount(() => {
   scrollbar-width: none;
 }
 
-.calendar-scrollbar {
+.calendar-scrollbar-shell {
   width: 100%;
 }
 
-.calendar-scrollbar :deep(.calendar-scrollbar__wrapper) {
+.calendar-scrollbar-viewport {
+  overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.calendar-scrollbar :deep(.calendar-scrollbar__content) {
-  width: max-content;
-}
-
-.calendar-scrollbar :deep(.scrollbar__thumb) {
-  background-color: rgb(148 163 184);
+.calendar-scrollbar-viewport::-webkit-scrollbar {
+  display: none;
 }
 
 .calendar-grid-width {
-  --calendar-cell-size: clamp(8.5rem, 18vw, 10rem);
-  min-width: calc(var(--calendar-cell-size) * 7);
+  width: 100rem;
 }
 
 .calendar-day-cell {
-  min-height: var(--calendar-cell-size);
+  min-height: 7rem;
 }
 
 .calendar-today {
