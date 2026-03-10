@@ -516,16 +516,10 @@ watch(visibleMonth, (month) => {
               <div class="flex h-full flex-col">
                 <div class="flex items-start justify-between gap-1">
                   <span
-                    class="calendar-day-number inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full pt-0.5 text-xs font-semibold sm:h-8 sm:w-8"
+                    class="calendar-day-number inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold sm:h-8 sm:w-8"
                     :class="day.isToday ? 'bg-slate-900 text-white' : 'bg-transparent text-current'"
                   >
                     {{ day.date.getDate() }}
-                  </span>
-                  <span
-                    v-if="day.tasks.length"
-                    class="calendar-day-number inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400"
-                  >
-                    {{ day.tasks.length }}
                   </span>
                 </div>
 
