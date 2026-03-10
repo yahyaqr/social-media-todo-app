@@ -43,6 +43,12 @@ const languageOptions = [
   { value: 'id-ID', label: 'Bahasa Indonesia' },
   { value: 'en-US', label: 'English' }
 ];
+const storytellingDurationOptions = [
+  { value: '90–110 kata', label: '45 seconds', duration: 45, wordRange: '90–110 kata' },
+  { value: '120–150 kata', label: '60 seconds', duration: 60, wordRange: '120–150 kata' },
+  { value: '180–220 kata', label: '90 seconds', duration: 90, wordRange: '180–220 kata' },
+  { value: '240–300 kata', label: '120 seconds', duration: 120, wordRange: '240–300 kata' }
+];
 
 type FrameworkOption = {
   value: string;
@@ -52,30 +58,79 @@ type FrameworkOption = {
 
 const frameworks: FrameworkOption[] = [
   {
-    value: 'hook-story-offer',
-    label: 'Hook, Story, Offer',
-    content: '1. Hook\n2. Story\n3. Lesson or insight\n4. Offer or CTA'
+    value: 'prep',
+    label: 'PREP - Very popular for insight content',
+    content:
+      'Transform the following information into the PREP framework (Point–Reason–Example–Point) for an Instagram Reels personal storytelling video.\n' +
+      'The tone should feel reflective and conversational.\n' +
+      'End with a clear takeaway insight.\n\n' +
+      'Structure\n' +
+      '1. Point\n' +
+      '2. Reason\n' +
+      '3. Example\n' +
+      '4. Point\n\n' +
+      'Information:\n' +
+      '[insert information]'
   },
   {
-    value: 'pas',
-    label: 'Problem, Agitate, Solution',
-    content: '1. Problem\n2. Why it matters\n3. Agitate the pain\n4. Solution\n5. CTA'
+    value: 'see',
+    label: 'SEE - Very common for teaching/insight',
+    content:
+      'Convert the following information into the SEE framework (State–Explain–Example) for a short Instagram Reels storytelling format.\n' +
+      'Keep the explanation simple and end with a relatable example or personal reflection.\n\n' +
+      'Structure\n' +
+      '1. State\n' +
+      '2. Explain\n' +
+      '3. Example\n\n' +
+      'Information:\n' +
+      '[insert information]'
   },
   {
-    value: 'aida',
-    label: 'AIDA',
-    content: '1. Attention\n2. Interest\n3. Desire\n4. Action'
+    value: 'air',
+    label: 'AIR - Great for reflective storytelling',
+    content:
+      'Transform the following information into the AIR framework (Assertion–Illustration–Reflection) for an Instagram Reels personal insight story.\n' +
+      'Start with a strong statement, include a short real-life illustration, and end with a meaningful reflection.\n\n' +
+      'Structure\n' +
+      '1. Assertion\n' +
+      '2. Illustration\n' +
+      '3. Reflection\n\n' +
+      'Information:\n' +
+      '[insert information]'
   },
   {
-    value: 'listicle',
-    label: 'Listicle',
-    content: '1. Strong headline\n2. Brief intro\n3. Point 1\n4. Point 2\n5. Point 3\n6. CTA'
+    value: 'par',
+    label: 'PAR - Great for life lessons',
+    content:
+      'Convert the following information into the PAR framework (Problem–Action–Result) as a short personal storytelling script for Instagram Reels.\n' +
+      'Make the story feel authentic and end with the result or lesson learned.\n\n' +
+      'Structure\n' +
+      '1. Problem\n' +
+      '2. Action\n' +
+      '3. Result\n\n' +
+      'Information:\n' +
+      '[insert information]'
+  },
+  {
+    value: 'star',
+    label: 'STAR - Very strong for experience storytelling',
+    content:
+      'Rewrite the following information using the STAR framework (Situation–Task–Action–Result) for an Instagram Reels storytelling video.\n' +
+      'Keep it concise and emphasize the personal experience and the final insight.\n\n' +
+      'Structure\n' +
+      '1. Situation\n' +
+      '2. Task\n' +
+      '3. Action\n' +
+      '4. Result\n\n' +
+      'Information:\n' +
+      '[insert information]'
   }
 ];
 
 const transcript = ref('');
 const selectedFramework = ref(frameworks[0].value);
 const selectedLanguage = ref(languageOptions[0].value);
+const selectedStorytellingDuration = ref(storytellingDurationOptions[0].value);
 const isRecording = ref(false);
 const speechError = ref('');
 const copyStatus = ref('');
@@ -101,17 +156,28 @@ const debugLog = (message: string, payload?: unknown): void => {
 };
 
 const normalizeTranscript = (value: string): string => {
-  const cleaned = value
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.;!?])/g, '$1')
-    .replace(/([,.;!?])([^\s])/g, '$1 $2')
-    .trim();
+  const cleanedLines = value
+    .split('\n')
+    .map((line) => line
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;!?])/g, '$1')
+      .replace(/([,.;!?])([^\s])/g, '$1 $2')
+      .trim())
+    .filter((line, index, lines) => line.length > 0 || (
+      index > 0 &&
+      index < lines.length - 1 &&
+      lines[index - 1] !== '' &&
+      lines[index + 1] !== ''
+    ));
 
-  if (!cleaned) {
+  if (cleanedLines.length === 0) {
     return '';
   }
 
-  const dedupedTail = cleaned.replace(/\b(\w+)(?:\s+\1\b)+/gi, '$1');
+  const dedupedTail = cleanedLines
+    .map((line) => line.replace(/\b(\w+)(?:\s+\1\b)+/gi, '$1'))
+    .join('\n');
+
   return dedupedTail.charAt(0).toUpperCase() + dedupedTail.slice(1);
 };
 
@@ -138,6 +204,10 @@ const releaseMicrophoneStream = (): void => {
 
 const selectedFrameworkContent = computed(() => {
   return frameworks.find((framework) => framework.value === selectedFramework.value)?.content ?? '';
+});
+
+const selectedStorytellingDurationMeta = computed(() => {
+  return storytellingDurationOptions.find((option) => option.value === selectedStorytellingDuration.value) ?? storytellingDurationOptions[0];
 });
 
 const browserSupportsSpeechRecognition = (): boolean => {
@@ -368,13 +438,12 @@ const copyOutline = async (): Promise<void> => {
     return;
   }
 
-  const payload = [
-    'Transcript',
-    transcript.value.trim() || '(empty)',
-    '',
-    'Framework',
-    selectedFrameworkContent.value
-  ].join('\n');
+  const promptInformation = transcript.value.trim() || '(empty)';
+  const languageInstruction = `Language: ${languageOptions.find((option) => option.value === selectedLanguage.value)?.label ?? selectedLanguage.value}`;
+  const durationInstruction = `Duration: ${selectedStorytellingDurationMeta.value.duration} seconds`;
+  const wordCountInstruction = `Recommended length: ${selectedStorytellingDurationMeta.value.wordRange}`;
+  const informationBlock = `${languageInstruction}\n${durationInstruction}\n${wordCountInstruction}\n\nInformation:`;
+  const payload = selectedFrameworkContent.value.replace('Information:', informationBlock).replace('[insert information]', promptInformation);
 
   try {
     await navigator.clipboard.writeText(payload);
@@ -432,10 +501,23 @@ onBeforeUnmount(() => {
     </header>
 
     <section class="flex min-h-0 flex-1 flex-col px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4">
-      <div class="mt-4">
-        <p class="text-sm font-semibold text-slate-800">Transcription Language</p>
-        <div class="mt-2">
-          <BasicDropdown v-model="selectedLanguage" :options="languageOptions" label="Select language" />
+      <div class="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <p class="text-sm font-semibold text-slate-800">Language</p>
+          <div class="mt-2">
+            <BasicDropdown v-model="selectedLanguage" :options="languageOptions" label="Select language" />
+          </div>
+        </div>
+
+        <div>
+          <p class="text-sm font-semibold text-slate-800">Duration</p>
+          <div class="mt-2">
+            <BasicDropdown
+              v-model="selectedStorytellingDuration"
+              :options="storytellingDurationOptions"
+              label="Select duration"
+            />
+          </div>
         </div>
       </div>
 
@@ -471,7 +553,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-        <pre class="whitespace-pre-wrap font-sans text-sm leading-6 text-slate-700">{{ selectedFrameworkContent }}</pre>
+        <pre class="max-h-56 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-6 text-slate-700">{{ selectedFrameworkContent }}</pre>
       </div>
     </section>
 
