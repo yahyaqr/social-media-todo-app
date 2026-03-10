@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import CustomScrollbar from 'custom-vue-scrollbar';
+import 'custom-vue-scrollbar/dist/style.css';
 import { toPng } from 'html-to-image';
 import { useRouter } from 'vue-router';
 import { stages, type StageId, type Todo } from '../data/stages';
@@ -488,7 +490,14 @@ watch(visibleMonth, (month) => {
         </button>
       </div>
 
-      <div class="overflow-x-auto overscroll-x-contain">
+      <CustomScrollbar
+        class="calendar-scrollbar"
+        :auto-hide="false"
+        :auto-expand="true"
+        :thumb-width="24"
+        wrapper-class="calendar-scrollbar__wrapper"
+        content-class="calendar-scrollbar__content"
+      >
         <div ref="monthSurfaceRef" class="calendar-grid-width bg-white">
           <div class="grid grid-cols-7 gap-px border-b border-slate-200 bg-slate-200 px-px pt-px">
             <div
@@ -546,7 +555,7 @@ watch(visibleMonth, (month) => {
             </button>
           </div>
         </div>
-      </div>
+      </CustomScrollbar>
     </section>
 
     <section class="mt-3 bg-white p-3 shadow-sm ring-1 ring-slate-200 sm:p-4">
@@ -621,6 +630,23 @@ watch(visibleMonth, (month) => {
 <style scoped>
 .scrollbar-width-none {
   scrollbar-width: none;
+}
+
+.calendar-scrollbar {
+  width: 100%;
+}
+
+.calendar-scrollbar :deep(.calendar-scrollbar__wrapper) {
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
+.calendar-scrollbar :deep(.calendar-scrollbar__content) {
+  width: max-content;
+}
+
+.calendar-scrollbar :deep(.scrollbar__thumb) {
+  background-color: rgb(148 163 184);
 }
 
 .calendar-grid-width {
