@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import CustomScrollbar from 'custom-vue-scrollbar';
 import 'custom-vue-scrollbar/dist/style.css';
 import { toPng } from 'html-to-image';
@@ -36,7 +36,9 @@ const visibleMonth = ref(startOfMonth(new Date()));
 const selectedDateKey = ref(toDateKey(new Date()));
 const monthHeaderRef = ref<HTMLElement | null>(null);
 const monthSurfaceRef = ref<HTMLElement | null>(null);
+const calendarScrollbarRef = ref<{ scrollEl: HTMLDivElement } | null>(null);
 const isDownloadingImage = ref(false);
+const CALENDAR_WHEEL_SCROLL_MULTIPLIER = 2.75;
 
 const stageOptions = [
   { value: 'all', label: 'All stages' },
@@ -74,6 +76,10 @@ function startOfDay(value: Date): Date {
 
 function startOfMonth(value: Date): Date {
   return new Date(value.getFullYear(), value.getMonth(), 1);
+}
+
+function endOfMonth(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth() + 1, 0);
 }
 
 function toDateKey(value: Date | number): string {
@@ -188,10 +194,13 @@ const activeExportFilters = computed<string[]>(() => {
 
 const visibleDays = computed<CalendarDay[]>(() => {
   const monthStart = startOfMonth(visibleMonth.value);
+  const monthEnd = endOfMonth(visibleMonth.value);
   const gridStart = addDays(monthStart, -monthStart.getDay());
+  const gridEnd = addDays(monthEnd, 6 - monthEnd.getDay());
   const today = startOfDay(new Date());
+  const totalDays = Math.round((gridEnd.getTime() - gridStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-  return Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: totalDays }, (_, index) => {
     const date = addDays(gridStart, index);
     const key = toDateKey(date);
 
@@ -208,6 +217,23 @@ const visibleDays = computed<CalendarDay[]>(() => {
 const selectedDay = computed<CalendarDay | null>(() => {
   return visibleDays.value.find((day) => day.key === selectedDateKey.value) ?? null;
 });
+
+const handleCalendarWheel = (event: WheelEvent): void => {
+  const scrollEl = calendarScrollbarRef.value?.scrollEl;
+
+  if (!scrollEl || scrollEl.scrollWidth <= scrollEl.clientWidth) {
+    return;
+  }
+
+  const dominantDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+
+  if (dominantDelta === 0) {
+    return;
+  }
+
+  event.preventDefault();
+  scrollEl.scrollLeft += dominantDelta * CALENDAR_WHEEL_SCROLL_MULTIPLIER;
+};
 
 const stageBadgeClass = (stageId: StageId): string => {
   switch (stageId) {
@@ -433,6 +459,14 @@ watch(visibleMonth, (month) => {
   const firstVisibleTaskDay = visibleDays.value.find((day) => day.isCurrentMonth && day.tasks.length)?.key;
   selectedDateKey.value = firstVisibleTaskDay ?? monthStartKey;
 }, { immediate: true });
+
+onMounted(() => {
+  calendarScrollbarRef.value?.scrollEl.addEventListener('wheel', handleCalendarWheel, { passive: false });
+});
+
+onBeforeUnmount(() => {
+  calendarScrollbarRef.value?.scrollEl.removeEventListener('wheel', handleCalendarWheel);
+});
 </script>
 
 <template>
@@ -491,6 +525,7 @@ watch(visibleMonth, (month) => {
       </div>
 
       <CustomScrollbar
+        ref="calendarScrollbarRef"
         class="calendar-scrollbar"
         :auto-hide="false"
         :auto-expand="true"
