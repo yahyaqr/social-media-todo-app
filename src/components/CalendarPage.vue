@@ -262,6 +262,55 @@ const goToToday = (): void => {
   selectedDateKey.value = toDateKey(today);
 };
 
+const createExportHeader = (width: number): HTMLElement => {
+  const header = document.createElement('div');
+  header.style.width = `${width}px`;
+  header.style.boxSizing = 'border-box';
+  header.style.display = 'flex';
+  header.style.flexDirection = 'column';
+  header.style.alignItems = 'center';
+  header.style.justifyContent = 'center';
+  header.style.gap = activeExportFilters.value.length ? '0.625rem' : '0';
+  header.style.padding = activeExportFilters.value.length ? '1.5rem 1.5rem 1rem' : '1.5rem';
+  header.style.borderBottom = '1px solid rgb(226 232 240)';
+  header.style.background = '#ffffff';
+
+  const title = document.createElement('p');
+  title.textContent = monthLabel.value;
+  title.style.margin = '0';
+  title.style.fontSize = activeExportFilters.value.length ? '2rem' : '2.25rem';
+  title.style.lineHeight = activeExportFilters.value.length ? '2.5rem' : '2.75rem';
+  title.style.fontWeight = '700';
+  title.style.color = 'rgb(15 23 42)';
+  title.style.textAlign = 'center';
+  header.appendChild(title);
+
+  if (activeExportFilters.value.length) {
+    const metaRow = document.createElement('div');
+    metaRow.style.display = 'flex';
+    metaRow.style.flexWrap = 'wrap';
+    metaRow.style.alignItems = 'center';
+    metaRow.style.justifyContent = 'center';
+    metaRow.style.columnGap = '1.5rem';
+    metaRow.style.rowGap = '0.375rem';
+
+    for (const label of activeExportFilters.value) {
+      const item = document.createElement('span');
+      item.textContent = label;
+      item.style.fontSize = '0.875rem';
+      item.style.lineHeight = '1.25rem';
+      item.style.fontWeight = '600';
+      item.style.color = 'rgb(100 116 139)';
+      item.style.whiteSpace = 'nowrap';
+      metaRow.appendChild(item);
+    }
+
+    header.appendChild(metaRow);
+  }
+
+  return header;
+};
+
 const waitForNextFrame = async (): Promise<void> => {
   await new Promise<void>((resolve) => {
     window.requestAnimationFrame(() => resolve());
@@ -276,11 +325,10 @@ const downloadCalendarImage = async (): Promise<void> => {
   isDownloadingImage.value = true;
 
   try {
-    const headerSource = monthHeaderRef.value;
     const gridSource = monthSurfaceRef.value;
     const exportHost = document.createElement('div');
     const exportNode = document.createElement('section');
-    const exportHeader = headerSource.cloneNode(true) as HTMLElement;
+    const exportHeader = createExportHeader(gridSource.scrollWidth);
     const exportGrid = gridSource.cloneNode(true) as HTMLElement;
     exportHost.style.position = 'fixed';
     exportHost.style.left = '0';
@@ -291,7 +339,6 @@ const downloadCalendarImage = async (): Promise<void> => {
     exportHost.style.overflow = 'visible';
     exportHost.style.background = '#ffffff';
     exportHost.dataset.calendarExportClone = 'true';
-    const hasExportFilters = activeExportFilters.value.length > 0;
     exportNode.style.width = `${gridSource.scrollWidth}px`;
     exportNode.style.minWidth = `${gridSource.scrollWidth}px`;
     exportNode.style.maxWidth = 'none';
@@ -300,12 +347,6 @@ const downloadCalendarImage = async (): Promise<void> => {
     exportNode.style.background = '#ffffff';
     exportNode.style.boxSizing = 'border-box';
     exportNode.style.border = '1px solid rgb(226 232 240)';
-    if (!hasExportFilters) {
-      exportNode.dataset.exportHeaderCompact = 'true';
-    }
-    exportHeader.style.width = `${gridSource.scrollWidth}px`;
-    exportHeader.style.minWidth = `${gridSource.scrollWidth}px`;
-    exportHeader.style.maxWidth = 'none';
     exportGrid.style.width = `${gridSource.scrollWidth}px`;
     exportGrid.style.minWidth = `${gridSource.scrollWidth}px`;
     exportGrid.style.maxWidth = 'none';
@@ -575,34 +616,6 @@ watch(visibleMonth, (month) => {
 [data-calendar-export-clone='true'] .calendar-nav-control,
 [data-calendar-export-clone='true'] .calendar-jump-today {
   visibility: hidden;
-}
-
-[data-calendar-export-clone='true'] .calendar-export-filters {
-  display: block;
-}
-
-[data-calendar-export-clone='true'] .calendar-header-content {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-inline: 3rem;
-  text-align: center;
-}
-
-[data-calendar-export-clone='true'] .calendar-header-row {
-  position: relative;
-}
-
-[data-calendar-export-clone='true'] [data-export-header-compact='true'] .calendar-header-content {
-  min-height: 3.75rem;
-}
-
-[data-calendar-export-clone='true'] [data-export-header-compact='true'] .calendar-month-title {
-  font-size: 1.5rem;
-  line-height: 2rem;
 }
 
 [data-calendar-export-clone='true'] .calendar-day-number {
