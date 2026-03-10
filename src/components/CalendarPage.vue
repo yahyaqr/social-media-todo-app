@@ -436,7 +436,7 @@ watch(visibleMonth, (month) => {
 </script>
 
 <template>
-  <article class="h-full overflow-y-auto scrollbar-width-none bg-slate-100 px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5">
+  <article class="swiper-no-swiping h-full overflow-y-auto scrollbar-width-none bg-slate-100 px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5">
     <div class="flex gap-2">
       <BasicDropdown v-model="stageFilter" class="w-1/2" :options="stageOptions" label="Stage" />
       <BasicDropdown v-model="clientTagFilter" class="w-1/2" :options="clientTagOptions" label="Client tag" />
@@ -494,7 +494,7 @@ watch(visibleMonth, (month) => {
         class="calendar-scrollbar"
         :auto-hide="false"
         :auto-expand="true"
-        :thumb-width="24"
+        :thumb-width="48"
         wrapper-class="calendar-scrollbar__wrapper"
         content-class="calendar-scrollbar__content"
       >
