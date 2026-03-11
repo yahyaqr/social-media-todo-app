@@ -32,9 +32,117 @@ const emit = defineEmits<{
   commit: [];
 }>();
 
+const normalizeCopiedText = (value: string): string =>
+  value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+const getSelectedHtml = (): string => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return '';
+  }
+
+  const fragment = selection.getRangeAt(0).cloneContents();
+  const container = document.createElement('div');
+  container.appendChild(fragment);
+  return container.innerHTML;
+};
+
+const htmlToPlainText = (html: string): string => {
+  if (!html) {
+    return '';
+  }
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const renderChildren = (node: Node, listContext?: { type: 'ul' | 'ol'; index: number }): string =>
+    Array.from(node.childNodes)
+      .map((child) => renderNode(child, listContext))
+      .join('');
+
+  const renderListItemText = (node: Node): string =>
+    normalizeCopiedText(renderChildren(node).replace(/\n+/g, '\n'));
+
+  const renderNode = (node: Node, listContext?: { type: 'ul' | 'ol'; index: number }): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent ?? '';
+    }
+
+    if (!(node instanceof HTMLElement)) {
+      return '';
+    }
+
+    const tagName = node.tagName.toLowerCase();
+
+    if (tagName === 'br') {
+      return '\n';
+    }
+
+    if (tagName === 'ul' || tagName === 'ol') {
+      let itemIndex = tagName === 'ol' ? Number(node.getAttribute('start') ?? '1') : 1;
+      const lines = Array.from(node.children)
+        .filter((child) => child.tagName.toLowerCase() === 'li')
+        .map((child) => {
+          const prefix = tagName === 'ol' ? `${itemIndex}. ` : '• ';
+          const text = renderListItemText(child);
+          itemIndex += 1;
+          return text
+            .split('\n')
+            .map((line, index) => (index === 0 ? `${prefix}${line}` : `  ${line}`))
+            .join('\n');
+        });
+      return `${lines.join('\n')}\n\n`;
+    }
+
+    if (tagName === 'li') {
+      return renderChildren(node, listContext);
+    }
+
+    if (tagName === 'p' || tagName === 'blockquote' || tagName === 'pre') {
+      return `${renderChildren(node)}\n\n`;
+    }
+
+    if (tagName === 'hr') {
+      return `---\n\n`;
+    }
+
+    if (tagName === 'div') {
+      return renderChildren(node);
+    }
+
+    return renderChildren(node, listContext);
+  };
+
+  return normalizeCopiedText(renderChildren(container));
+};
+
 const editor = useEditor({
   content: props.modelValue || '<p></p>',
   editorProps: {
+    handleDOMEvents: {
+      copy: (view, event) => {
+        const clipboardEvent = event as ClipboardEvent;
+        if (!clipboardEvent.clipboardData) {
+          return false;
+        }
+
+        const { from, to, empty } = view.state.selection;
+        if (empty) {
+          return false;
+        }
+
+        const html = getSelectedHtml();
+        const fallbackText = normalizeCopiedText(view.state.doc.textBetween(from, to, '\n'));
+        const text = htmlToPlainText(html) || fallbackText;
+
+        clipboardEvent.preventDefault();
+        clipboardEvent.clipboardData.setData('text/plain', text);
+        if (html) {
+          clipboardEvent.clipboardData.setData('text/html', html);
+        }
+        return true;
+      }
+    },
     attributes: {
       class: 'full-editor min-h-[14rem] px-4 py-3 outline-none text-slate-900'
     }
@@ -357,6 +465,15 @@ const setInlineLink = (): void => {
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+:deep(.full-editor p) {
+  line-height: 1.65;
+  margin: 0;
+}
+
+:deep(.full-editor p + p) {
+  margin-top: 0.8rem;
 }
 
 :deep(.full-editor ul[data-type='taskList']) {
