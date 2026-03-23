@@ -481,11 +481,11 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="flex h-[100dvh] flex-col bg-slate-100 text-slate-900">
-    <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-4">
-      <div class="flex items-center gap-3">
+    <header class="sticky top-0 z-10 border-b border-slate-200/70 bg-white/90 px-3 py-2 backdrop-blur sm:px-4">
+      <div class="flex items-center gap-2">
         <button
           type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+          class="inline-flex h-8 w-12 items-center justify-center rounded-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
           aria-label="Back"
           @click="goBack"
         >
@@ -493,41 +493,28 @@ onBeforeUnmount(() => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <div class="min-w-0">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Content Lab</p>
-          <h1 class="truncate text-lg font-bold text-slate-900">Content Ideation</h1>
-        </div>
+        <h1 class="min-w-0 truncate text-sm font-medium text-slate-900">Content Outlining</h1>
       </div>
     </header>
 
     <section class="flex min-h-0 flex-1 flex-col px-3 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4">
-      <div class="mt-4 grid grid-cols-2 gap-3">
-        <div>
-          <p class="text-sm font-semibold text-slate-800">Language</p>
-          <div class="mt-2">
-            <BasicDropdown v-model="selectedLanguage" :options="languageOptions" label="Select language" />
-          </div>
-        </div>
+      <div class="grid grid-cols-2 gap-3">
+        <BasicDropdown v-model="selectedLanguage" :options="languageOptions" label="Select language" />
 
-        <div>
-          <p class="text-sm font-semibold text-slate-800">Duration</p>
-          <div class="mt-2">
-            <BasicDropdown
-              v-model="selectedStorytellingDuration"
-              :options="storytellingDurationOptions"
-              label="Select duration"
-            />
-          </div>
-        </div>
+        <BasicDropdown
+          v-model="selectedStorytellingDuration"
+          :options="storytellingDurationOptions"
+          label="Select duration"
+        />
       </div>
 
-      <div class="mt-4 flex min-h-0 flex-1 flex-col">
+      <div class="mt-4 flex flex-1 flex-col">
         <label class="block text-sm font-semibold text-slate-800" for="transcript">Transcript</label>
         <textarea
           id="transcript"
           :value="transcript"
           placeholder="Your transcribed audio will appear here."
-          class="mt-2 min-h-0 flex-1 resize-none rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
+          class="mt-2 min-h-[20rem] flex-1 resize-none rounded-2xl border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none ring-blue-300 placeholder:text-slate-400 focus:ring-2"
           @input="handleTranscriptInput(($event.target as HTMLTextAreaElement).value)"
         />
       </div>

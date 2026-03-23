@@ -260,7 +260,7 @@ const signOut = async (): Promise<void> => {
         class="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
         @click="goToContentIdeation"
       >
-        Content Ideation
+        Content Outlining
       </button>
       <button
         type="button"

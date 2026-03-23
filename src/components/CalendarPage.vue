@@ -498,38 +498,60 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <article class="swiper-no-swiping h-full overflow-y-auto scrollbar-width-none bg-slate-100 px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5">
+  <article
+    class="swiper-no-swiping h-full overflow-y-auto bg-slate-100 px-3 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] [scrollbar-width:none] sm:px-4 sm:pt-5"
+  >
     <div class="flex gap-2">
-      <BasicDropdown v-model="stageFilter" class="w-1/2" :options="stageOptions" label="Stage" />
-      <BasicDropdown v-model="clientTagFilter" class="w-1/2" :options="clientTagOptions" label="Client tag" />
+      <BasicDropdown
+        v-model="stageFilter"
+        class="w-1/2"
+        :options="stageOptions"
+        label="Stage"
+      />
+      <BasicDropdown
+        v-model="clientTagFilter"
+        class="w-1/2"
+        :options="clientTagOptions"
+        label="Client tag"
+      />
     </div>
 
-    <section class="mt-3 bg-white rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200">
+    <section class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
       <div
         ref="monthHeaderRef"
-        class="calendar-header-row grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 border-b border-slate-200 px-3 py-3 sm:px-4"
+        class="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-2 border-b border-slate-200 px-3 py-3 sm:px-4"
       >
         <button
           type="button"
-          class="calendar-nav-control inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
           aria-label="Previous month"
+          class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 active:scale-[0.98]"
           @click="goToPreviousMonth"
         >
-          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            viewBox="0 0 24 24"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
 
-        <div class="calendar-header-content min-w-0 text-center">
-          <p class="calendar-month-title truncate text-lg font-semibold text-slate-900">{{ monthLabel }}</p>
+        <div class="min-w-0 text-center">
+          <p class="truncate text-lg font-semibold tracking-tight text-slate-900">
+            {{ monthLabel }}
+          </p>
+
           <button
             type="button"
-            class="calendar-jump-today mt-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+            class="mt-1 text-xs font-semibold text-blue-600 transition hover:text-blue-700"
             @click="goToToday"
           >
             Jump to today
           </button>
-          <div v-if="activeExportFilters.length" class="calendar-export-filters mt-1 hidden">
+
+          <div v-if="activeExportFilters.length" class="mt-1 hidden">
             <p
               v-for="filterLabel in activeExportFilters"
               :key="filterLabel"
@@ -542,80 +564,88 @@ onBeforeUnmount(() => {
 
         <button
           type="button"
-          class="calendar-nav-control inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 text-slate-700 transition hover:bg-slate-100"
           aria-label="Next month"
+          class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 active:scale-[0.98]"
           @click="goToNextMonth"
         >
-          <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            viewBox="0 0 24 24"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M9 6l6 6-6 6" />
           </svg>
         </button>
       </div>
 
-      <div class="calendar-scrollbar-shell">
+      <div class="w-full">
         <div
           ref="calendarViewportRef"
-          class="calendar-scrollbar-viewport"
+          class="overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           @scroll="handleCalendarScroll"
           @wheel="handleCalendarWheel"
         >
-          <div ref="monthSurfaceRef" class="calendar-grid-width bg-white">
-          <div class="grid grid-cols-7 gap-px border-b border-slate-200 bg-slate-200 px-px pt-px">
-            <div
-              v-for="label in weekdayLabels"
-              :key="label"
-              class="bg-slate-50 px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs"
-            >
-              {{ label }}
+          <div ref="monthSurfaceRef" class="min-w-[70rem] bg-white">
+            <div class="grid grid-cols-7 gap-px border-b border-slate-200 bg-slate-200 px-px pt-px">
+              <div
+                v-for="label in weekdayLabels"
+                :key="label"
+                class="bg-slate-50 px-1 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs"
+              >
+                {{ label }}
+              </div>
             </div>
-          </div>
 
-          <div class="grid grid-cols-7 gap-px bg-slate-200 p-px">
-            <button
-              v-for="day in visibleDays"
-              :key="day.key"
-              type="button"
-              class="calendar-day-cell calendar-day-selectable flex h-full flex-col bg-white px-1.5 py-1.5 text-left align-top transition active:scale-[0.99] sm:px-2 sm:py-2"
-              :class="[
-                day.isCurrentMonth ? 'text-slate-900' : 'bg-slate-50 text-slate-400',
-                selectedDateKey === day.key ? 'ring-2 ring-inset ring-blue-500' : '',
-                day.isToday ? 'calendar-today' : ''
-              ]"
-              @click="selectDay(day)"
-            >
-              <div class="flex h-full flex-col">
-                <div class="flex items-start justify-between gap-1">
-                  <span
-                    class="calendar-day-number inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold sm:h-8 sm:w-8"
-                    :class="day.isToday ? 'bg-slate-900 text-white' : 'bg-transparent text-current'"
-                  >
-                    {{ day.date.getDate() }}
-                  </span>
-                </div>
+            <div class="grid grid-cols-7 gap-px bg-slate-200 p-px">
+              <button
+                v-for="day in visibleDays"
+                :key="day.key"
+                type="button"
+                class="flex min-h-[7rem] h-full flex-col bg-white px-1.5 py-1.5 text-left align-top transition active:scale-[0.99] sm:px-2 sm:py-2"
+                :class="[
+                  day.isCurrentMonth ? 'text-slate-900' : 'bg-slate-50 text-slate-400',
+                  selectedDateKey === day.key ? 'ring-2 ring-inset ring-blue-500' : '',
+                  day.isToday
+                    ? 'bg-[linear-gradient(180deg,rgba(15,23,42,0.04),rgba(15,23,42,0))]'
+                    : ''
+                ]"
+                @click="selectDay(day)"
+              >
+                <div class="flex h-full flex-col">
+                  <div class="flex items-start justify-between gap-1">
+                    <span
+                      class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold sm:h-8 sm:w-8"
+                      :class="day.isToday ? 'bg-slate-900 text-white' : 'bg-transparent text-current'"
+                    >
+                      {{ day.date.getDate() }}
+                    </span>
+                  </div>
 
-                <div class="mt-1.5 space-y-1">
-                  <button
-                    v-for="task in day.tasks.slice(0, 2)"
-                    :key="task.todoId"
-                    type="button"
-                    class="w-full rounded-xl border px-1.5 py-1 text-[10px] font-medium leading-3 sm:px-2 sm:text-[11px]"
-                    :class="[dayAccentClass(task.stageId), task.done ? 'opacity-60 line-through' : '']"
-                    @click.stop="openTask(task)"
-                  >
-                    {{ task.title }}
-                  </button>
+                  <div class="mt-1.5 space-y-1">
+                    <button
+                      v-for="task in day.tasks.slice(0, 2)"
+                      :key="task.todoId"
+                      type="button"
+                      class="w-full rounded-xl border px-1.5 py-1 text-[10px] font-medium leading-3 sm:px-2 sm:text-[11px]"
+                      :class="[dayAccentClass(task.stageId), task.done ? 'line-through opacity-60' : '']"
+                      @click.stop="openTask(task)"
+                    >
+                      {{ task.title }}
+                    </button>
 
-                  <div
-                    v-if="day.tasks.length > 2"
-                    class="rounded-xl border border-dashed border-slate-300 px-1.5 py-1 text-[10px] font-semibold text-slate-500 sm:px-2 sm:text-[11px]"
-                  >
-                    +{{ day.tasks.length - 2 }} more
+                    <div
+                      v-if="day.tasks.length > 2"
+                      class="rounded-xl border border-dashed border-slate-300 px-1.5 py-1 text-[10px] font-semibold text-slate-500 sm:px-2 sm:text-[11px]"
+                    >
+                      +{{ day.tasks.length - 2 }} more
+                    </div>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
+            </div>
           </div>
-        </div>
         </div>
 
         <HorizontalScrollbar
@@ -628,17 +658,27 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="mt-3 bg-white p-3 rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-200 sm:p-4">
+    <section class="mt-3 overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200 sm:p-4">
       <div class="flex items-center justify-between gap-3">
-        <div>
-          <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Selected day</p>
-          <h2 class="text-lg font-semibold text-slate-900">
-            {{ selectedDay?.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) ?? 'No day selected' }}
+        <div class="min-w-0">
+          <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Selected day
+          </p>
+          <h2 class="text-lg font-semibold tracking-tight text-slate-900">
+            {{
+              selectedDay?.date.toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              }) ?? 'No day selected'
+            }}
           </h2>
         </div>
+
         <p
           v-if="selectedDay"
-          class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"
+          class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"
         >
           {{ selectedDay.tasks.length }} task{{ selectedDay.tasks.length === 1 ? '' : 's' }}
         </p>
@@ -649,7 +689,7 @@ onBeforeUnmount(() => {
           v-for="task in selectedDay.tasks"
           :key="`${task.stageId}-${task.todoId}`"
           type="button"
-          class="flex w-full items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:bg-slate-100"
+          class="flex w-full items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:bg-slate-100 active:scale-[0.99]"
           @click="openTask(task)"
         >
           <div class="min-w-0">
@@ -660,6 +700,7 @@ onBeforeUnmount(() => {
               >
                 {{ task.stageTitle }}
               </span>
+
               <span
                 v-if="task.clientTag"
                 class="truncate text-xs font-medium text-slate-500"
@@ -667,12 +708,22 @@ onBeforeUnmount(() => {
                 {{ task.clientTag }}
               </span>
             </div>
-            <p class="mt-2 text-sm font-semibold text-slate-900" :class="task.done ? 'line-through opacity-60' : ''">
+
+            <p
+              class="mt-2 text-sm font-semibold text-slate-900"
+              :class="task.done ? 'line-through opacity-60' : ''"
+            >
               {{ task.title }}
             </p>
           </div>
 
-          <svg viewBox="0 0 24 24" class="mt-1 h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            viewBox="0 0 24 24"
+            class="mt-1 h-4 w-4 shrink-0 text-slate-400"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <path d="M9 6l6 6-6 6" />
           </svg>
         </button>
@@ -698,53 +749,22 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.scrollbar-width-none {
-  scrollbar-width: none;
+[data-calendar-export-clone='true'] .bg-\[linear-gradient\(180deg\,rgba\(15\,23\,42\,0\.04\)\,rgba\(15\,23\,42\,0\)\)\] {
+  background-image: none !important;
 }
 
-.calendar-scrollbar-shell {
-  width: 100%;
-}
-
-.calendar-scrollbar-viewport {
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.calendar-scrollbar-viewport::-webkit-scrollbar {
-  display: none;
-}
-
-.calendar-grid-width {
-  width: 70rem;
-}
-
-.calendar-day-cell {
-  min-height: 7rem;
-}
-
-.calendar-today {
-  background-image: linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0));
-}
-
-[data-calendar-export-clone='true'] .calendar-today {
-  background-image: none;
-}
-
-[data-calendar-export-clone='true'] .calendar-nav-control,
-[data-calendar-export-clone='true'] .calendar-jump-today {
+[data-calendar-export-clone='true'] button[aria-label='Previous month'],
+[data-calendar-export-clone='true'] button[aria-label='Next month'],
+[data-calendar-export-clone='true'] button[class*='text-blue-600'] {
   visibility: hidden;
 }
 
-[data-calendar-export-clone='true'] .calendar-day-number {
+[data-calendar-export-clone='true'] .rounded-full.bg-slate-900.text-white {
   background: transparent !important;
   color: inherit !important;
 }
 
-[data-calendar-export-clone='true'] .calendar-day-selectable {
+[data-calendar-export-clone='true'] button[class*='ring-2'] {
   box-shadow: none !important;
 }
 </style>

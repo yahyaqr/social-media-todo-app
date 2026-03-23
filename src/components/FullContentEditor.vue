@@ -468,12 +468,12 @@ const setInlineLink = (): void => {
 }
 
 :deep(.full-editor p) {
-  line-height: 1.65;
+  line-height: 1.45;
   margin: 0;
 }
 
 :deep(.full-editor p + p) {
-  margin-top: 0.8rem;
+  margin-top: 1.15rem;
 }
 
 :deep(.full-editor ul[data-type='taskList']) {
