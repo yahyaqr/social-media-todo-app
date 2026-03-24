@@ -4,333 +4,342 @@ export type FrameworkOption = {
   content: string;
 };
 
-export const contentIdeationFrameworks: FrameworkOption[] = [
+type CaptionTone = 'Insightful' | 'Reflective' | 'Slightly punchy';
+
+type VersionPreset = {
+  code: string;
+  label: string;
+};
+
+type FrameworkDefinition = {
+  value: string;
+  label: string;
+  frameworkName: string;
+  frameworkFullName: string;
+  objective: string;
+  tone: string;
+  structureSteps: string[];
+  structureGuidance: string[];
+  captionA: CaptionTone;
+  captionB: CaptionTone;
+  closingLabel: string;
+  closingHint: string[];
+  versionPresets?: VersionPreset[];
+  versionDifferentiator?: string;
+  extraCoreConstraints?: string[];
+  extraOutputRules?: string[];
+};
+
+const joinLines = (lines: string[]) => lines.join('\n');
+
+const buildBulletSection = (title: string, items: string[]) =>
+  joinLines([title, ...items.map((item) => `- ${item}`)]);
+
+const COMMON_CORE_CONSTRAINTS = [
+  'Treat the Information section at the end as the primary source material and the source of truth',
+  'Base the script closely on the user’s original story, sequence, message, and emotional direction',
+  'This task is primarily paraphrasing, outlining, restructuring, and tightening — not inventing a new story',
+  'Do not add new events, new examples, new backstory, new emotional turns, or new conclusions unless they are already clearly implied by the source material',
+  'Do not replace the original story with a more generic or more viral-sounding version',
+  'Preserve the original meaning, perspective, and intent',
+  'If the source contains specific examples, keep those examples central instead of swapping them out for different ones',
+  'If the source contains a specific belief, tension, realization, or conclusion, preserve it',
+  'Use simple, spoken Bahasa Indonesia that sounds natural when read aloud',
+  'The script must sound spoken, not written',
+  'Use natural spoken rhythm: vary sentence length, allow slight imperfection, and avoid overly polished phrasing',
+  'Avoid generic motivational, preachy, or cliché language',
+  'Do not make the script sound like a quote template, inspirational poster, or AI-generated wisdom content',
+  'Prioritize fidelity to the original material over cleverness',
+  'Tighten repetition, improve clarity, and improve flow — but do not distort the original point',
+  'Follow the recommended length closely',
+  'Every sentence should either preserve a key idea from the source, clarify it, sharpen it, or improve its flow'
+];
+
+const COMMON_GROUNDING_RULES = [
+  'First, identify the actual core story from the source material before writing',
+  'Preserve the original speaker position: if the source feels personal, keep it personal; if it feels reflective, keep it reflective',
+  'Preserve the original emotional logic: do not force a sharper twist if the source does not support it',
+  'Preserve important causal links and sequence from the source',
+  'When compressing, remove redundancy first — not substance',
+  'When paraphrasing, keep the meaning intact even if wording changes',
+  'Do not over-optimize for virality at the expense of faithfulness'
+];
+
+const COMMON_RETENTION_RULES = [
+  'The opening should still feel engaging, but it must come from the real tension already present in the source material',
+  'Do not fabricate a more dramatic hook that changes the user’s original meaning',
+  'You may tighten the first line to make it more scroll-stopping, but it must remain faithful to the source',
+  'Build curiosity by controlling revelation and flow, not by inventing new drama'
+];
+
+const DEFAULT_VERSION_PRESETS: VersionPreset[] = [
+  { code: 'V1', label: 'Closest to original -> most faithful paraphrase with minimal reshaping' },
+  { code: 'V2', label: 'Cleaner flow -> same story, tighter structure, better spoken rhythm' },
+  { code: 'V3', label: 'More emotionally focused -> same story, stronger emphasis on the original emotional tension' }
+];
+
+const buildStructureSection = (definition: FrameworkDefinition) =>
+  joinLines([
+    `Structure (${definition.frameworkName})`,
+    ...definition.structureSteps.map((step, index) => `${index + 1}. ${step}`),
+    ...definition.structureGuidance.map((item) => `- ${item}`)
+  ]);
+
+const buildVersionSection = (definition: FrameworkDefinition) => {
+  const presets = definition.versionPresets ?? DEFAULT_VERSION_PRESETS;
+
+  return joinLines([
+    'Versioning Approach',
+    ...presets.map((preset) => `- ${preset.code}: ${preset.label}`),
+    `- ${
+      definition.versionDifferentiator ??
+      'All versions must stay rooted in the same original source material. They may differ in tightness, emphasis, pacing, and phrasing, but not in core story, meaning, or conclusion.'
+    }`
+  ]);
+};
+
+const buildScriptSubheadingRules = (steps: string[]) =>
+  joinLines([
+    '- The script must include explicit subheadings for each framework section',
+    '- Write the script under these exact subheadings, in this exact order:',
+    ...steps.map((step) => `  - ${step}`),
+    '- Each subheading must appear inside the Script (Ready to Read), not outside it',
+    '- Content under each subheading must remain natural, spoken, and emotionally coherent',
+    '- Even with subheadings, the writing should still feel like a real spoken script, not like lecture notes',
+    '- Do not skip any subheading'
+  ]);
+
+const buildOutputFormatSection = (definition: FrameworkDefinition) =>
+  joinLines([
+    'Output Format (VERY IMPORTANT)',
+    '',
+    'For each version, provide:',
+    '',
+    '1. Title (Angle)',
+    '- Short phrase that reflects the actual main idea of the source',
+    '- Do not create a misleading or overly viral title that shifts the meaning',
+    '',
+    '2. Script (Ready to Read)',
+    '- Natural flow, optimized for spoken delivery',
+    '- Keep it faithful to the source material',
+    '- This should feel like a clearer, tighter, more speakable version of the original story',
+    buildScriptSubheadingRules(definition.structureSteps),
+    ...(definition.extraOutputRules ?? []).map((item) => `- ${item}`),
+    '',
+    '3. Caption (2 versions)',
+    `- Version A: ${definition.captionA}`,
+    `- Version B: ${definition.captionB}`,
+    '- Keep both concise and aligned with the original story’s meaning',
+    '- Do not introduce new angles that are absent from the source',
+    '',
+    `4. ${definition.closingLabel}`,
+    ...definition.closingHint.map((item) => `- ${item}`),
+    '',
+    'Information:',
+    '[insert information]'
+  ]);
+
+const buildFrameworkPrompt = (definition: FrameworkDefinition): string =>
+  joinLines([
+    `Restructure and paraphrase the following user-provided story into Instagram Reels scripts using the ${definition.frameworkName} framework (${definition.frameworkFullName}).`,
+    '',
+    `Objective: ${definition.objective}`,
+    '',
+    `Tone: ${definition.tone}`,
+    '',
+    buildBulletSection('Source Fidelity Rules', [
+      ...COMMON_CORE_CONSTRAINTS,
+      ...(definition.extraCoreConstraints ?? [])
+    ]),
+    '',
+    buildBulletSection('Grounding Rules', COMMON_GROUNDING_RULES),
+    '',
+    buildBulletSection('Hook and Retention Rules', COMMON_RETENTION_RULES),
+    '',
+    buildStructureSection(definition),
+    '',
+    buildVersionSection(definition),
+    '',
+    buildOutputFormatSection(definition)
+  ]);
+
+const FRAMEWORK_DEFINITIONS: FrameworkDefinition[] = [
   {
-    value: 'prep',
-    label: 'PREP - Very popular for insight content',
-    content:
-      'Transform the following information into multiple high-performing Instagram Reels scripts using the PREP framework (Point-Reason-Example-Point).\n\n' +
-      'Objective: Create emotionally resonant, highly relatable short-form content that feels authentic, not preachy, and drives saves/shares.\n\n' +
-      'Tone: Conversational, introspective, slightly vulnerable, with moments of clarity (like a personal realization being shared).\n\n' +
-      'Core Constraints\n' +
-      '- Use simple, spoken Bahasa Indonesia (natural, human, not formal)\n' +
-      '- Avoid generic motivational or overused phrases\n' +
-      '- Each version must contain a clear emotional shift (confusion -> realization -> clarity)\n' +
-      '- Avoid repeating the same angles, examples, or wording across versions\n' +
-      '- Make the insight feel "earned" (not obvious from the start)\n\n' +
-      'Structure (PREP per version)\n' +
-      '1. Point (Hook)\n' +
-      '- Pattern interrupt / contrarian / honest confession\n' +
-      '- Must grab attention in the first sentence\n' +
-      '2. Reason (Insight)\n' +
-      '- Deeper psychological or behavioral explanation\n' +
-      '- Avoid surface-level reasoning\n' +
-      '3. Example (Story)\n' +
-      '- Specific, vivid, everyday scenario\n' +
-      '- Show behavior (not just tell)\n' +
-      '4. Point (Reframe)\n' +
-      '- Sharper, more mature version of the opening\n' +
-      '- Clear takeaway that feels grounded and applicable\n\n' +
-      'Generate 5 Distinct Versions\n' +
-      '- V1: Soft & reflective\n' +
-      '- V2: Deep & introspective\n' +
-      '- V3: Punchy & direct\n' +
-      '- V4: Story-heavy (example dominates)\n' +
-      '- V5: Insight-heavy (reason dominates)\n\n' +
-      'Output Format (VERY IMPORTANT)\n\n' +
-      'For each version, provide:\n\n' +
-      '1. Title (Angle)\n' +
-      '- Short phrase describing the core idea\n\n' +
-      '2. Hook Options (3 variations)\n' +
-      '- Different opening lines for A/B testing\n\n' +
-      '3. Script (Ready to Read)\n' +
-      '- Natural flow, optimized for spoken delivery\n\n' +
-      '4. PREP Breakdown\n\n' +
-      '- Point:\n' +
-      '- Reason:\n' +
-      '- Example:\n' +
-      '- Point (Reframe):\n\n' +
-      '5. Delivery Direction\n\n' +
-      '- Tone (e.g., calm, assertive, reflective)\n' +
-      '- Suggested pauses / emphasis\n' +
-      '- Facial expression / vibe\n\n' +
-      '6. Visual Direction (Simple)\n\n' +
-      '- A-roll idea (talking head style)\n' +
-      '- Optional B-roll ideas (if any)\n\n' +
-      '7. Caption (2 versions)\n\n' +
-      '- Version A: Insightful\n' +
-      '- Version B: Slightly punchy\n\n' +
-      '8. Closing Line Alternatives (2 options)\n' +
-      '- For testing different emotional endings\n\n' +
-      'Optional Optimization Layer\n\n' +
-      'Make each version slightly different in:\n\n' +
-      '- Emotional intensity\n' +
-      '- Sentence rhythm (some slower, some punchier)\n' +
-      '- Level of directness\n\n' +
-      'Information:\n' +
-      '[insert information]'
+    value: 'insight',
+    label: 'Insight - Clear & structured thinking',
+    frameworkName: 'Claim-Reason-Example',
+    frameworkFullName: 'Argumentative Structure (Rhetoric)',
+    objective:
+      'Turn the original story into a clear, structured insight by presenting a core idea, explaining the reasoning, and grounding it with a real example from the source.',
+    tone:
+      'Clear, grounded, and conversational. It should feel like the same person explaining their thinking more clearly, not like a lecture.',
+    structureSteps: ['Claim', 'Reason', 'Example'],
+    structureGuidance: [
+      'State the main idea clearly from the source',
+      'Explain why that idea is true using the source logic',
+      'Support it with a concrete example from the source',
+      'End with the same core meaning already present in the source',
+      'Do not introduce new arguments, lessons, or ideas'
+    ],
+    captionA: 'Insightful',
+    captionB: 'Slightly punchy',
+    closingLabel: 'Closing Line Alternatives (2 options)',
+    closingHint: [
+      'Both must reinforce the same core idea',
+      'Keep them grounded in the original message'
+    ],
+    extraCoreConstraints: [
+      'Do not split one subtle reflection into multiple claims unless the source clearly supports that structure',
+      'If the source contains multiple examples, choose the most central one or combine them carefully without changing meaning'
+    ],
+    extraOutputRules: [
+      'Claim must express the source’s actual main point',
+      'Reason must come from the source’s actual logic',
+      'Example must stay grounded in the source material'
+    ]
   },
   {
-    value: 'see',
-    label: 'SEE - Very common for teaching/insight',
-    content:
-      'Transform the following information into multiple high-performing Instagram Reels scripts using the SEE framework (State-Explain-Example).\n\n' +
-      'Objective: Deliver simple but powerful insights that feel relatable, easy to understand, and emotionally resonant-without sounding preachy or overly complex.\n\n' +
-      'Tone: Conversational, warm, and reflective (like explaining something you just realized to a friend).\n\n' +
-      'Core Constraints\n' +
-      '- Use simple, spoken Bahasa Indonesia (natural, human, not formal)\n' +
-      '- Keep explanations clear and easy to follow (avoid overcomplicated wording)\n' +
-      '- Avoid generic motivational phrases\n' +
-      '- Each version must include a subtle realization or shift in perspective\n' +
-      '- Do not repeat the same phrasing, examples, or angles across versions\n' +
-      '- The ending (Example) must feel relatable and grounded (not abstract)\n\n' +
-      'Structure (SEE per version)\n' +
-      '1. State (Hook)\n' +
-      '- Clear, strong opening statement (can be relatable truth / contrarian insight / honest observation)\n' +
-      '- Must immediately resonate or trigger curiosity\n' +
-      '2. Explain (Clarity)\n' +
-      '- Simple explanation of why this happens or what it means\n' +
-      '- Focus on clarity over depth (easy to digest in one listen)\n' +
-      '3. Example (Relatable Closing)\n' +
-      '- Concrete, everyday scenario or personal reflection\n' +
-      '- Should make the audience think: "ini gue banget"\n\n' +
-      'Generate 5 Distinct Versions\n' +
-      '- V1: Soft & relatable\n' +
-      '- V2: Deep but simple\n' +
-      '- V3: Punchy & direct\n' +
-      '- V4: Story-driven (example dominates)\n' +
-      '- V5: Insight-driven (state + explain dominate)\n\n' +
-      'Output Format (VERY IMPORTANT)\n\n' +
-      'For each version, provide:\n\n' +
-      '1. Title (Angle)\n' +
-      '- Short phrase describing the core idea\n\n' +
-      '2. Hook Options (3 variations)\n' +
-      '- Different opening lines for A/B testing\n\n' +
-      '3. Script (Ready to Read)\n' +
-      '- Natural flow, optimized for spoken delivery\n\n' +
-      '4. SEE Breakdown\n\n' +
-      '- State:\n' +
-      '- Explain:\n' +
-      '- Example:\n\n' +
-      '5. Delivery Direction\n\n' +
-      '- Tone (e.g., calm, warm, reflective)\n' +
-      '- Suggested pauses / emphasis\n' +
-      '- Facial expression / vibe\n\n' +
-      '6. Visual Direction (Simple)\n\n' +
-      '- A-roll idea (talking head style)\n' +
-      '- Optional B-roll ideas\n\n' +
-      '7. Caption (2 versions)\n\n' +
-      '- Version A: Insightful\n' +
-      '- Version B: Slightly punchy\n\n' +
-      '8. Closing Reflection Variations (2 options)\n' +
-      '- Alternative ways to end the example/reflection\n\n' +
-      'Optional Optimization Layer\n\n' +
-      'Make each version slightly different in:\n\n' +
-      '- Emotional tone (lighter vs deeper)\n' +
-      '- Sentence rhythm (slow vs punchy)\n' +
-      '- Level of directness\n\n' +
-      'Information:\n' +
-      '[insert information]'
+    value: 'story',
+    label: 'Story - Lived experience & transformation',
+    frameworkName: 'Story Arc',
+    frameworkFullName: 'Setup-Conflict-Resolution',
+    objective:
+      'Restructure the story into a clear narrative flow that preserves the original experience, tension, and resolution.',
+    tone:
+      'Natural, human, and grounded. It should feel like a real story being told more clearly, not like a dramatized rewrite.',
+    structureSteps: ['Setup', 'Conflict', 'Resolution'],
+    structureGuidance: [
+      'Anchor the real situation from the source',
+      'Highlight the tension, shift, or realization already present in the story',
+      'End with the original resolution, takeaway, or perspective change',
+      'Do not dramatize beyond the source'
+    ],
+    captionA: 'Reflective',
+    captionB: 'Slightly punchy',
+    closingLabel: 'Closing Line Alternatives (2 options)',
+    closingHint: [
+      'Stay faithful to the original ending',
+      'Do not exaggerate the resolution'
+    ],
+    extraCoreConstraints: [
+      'Do not manufacture conflict if the source is subtle or reflective',
+      'Do not add extra plot points to make the story feel more cinematic'
+    ],
+    extraOutputRules: [
+      'Setup must anchor the source context clearly',
+      'Conflict must reflect the source tension or shift, not a newly dramatized version',
+      'Resolution may be a realization, not necessarily a neat ending'
+    ]
   },
   {
-    value: 'air',
-    label: 'AIR - Great for reflective storytelling',
-    content:
-      'Transform the following information into multiple high-performing Instagram Reels scripts using the AIR framework (Assertion-Illustration-Reflection).\n\n' +
-      'Objective: Deliver sharp, memorable personal insights that feel honest, grounded, and emotionally resonant-ending with a reflection that lingers.\n\n' +
-      'Tone: Conversational, reflective, slightly vulnerable, with a sense of clarity at the end (like sharing a realization you wish you knew earlier).\n\n' +
-      'Core Constraints\n' +
-      '- Use simple, spoken Bahasa Indonesia (natural, human, not formal)\n' +
-      '- Start with a strong, clear assertion (no warm-up, langsung to the point)\n' +
-      '- Avoid generic motivational or cliché phrases\n' +
-      '- Each version must include an emotional shift (unaware -> aware / assumption -> realization)\n' +
-      '- Illustration must feel real, specific, and relatable (not abstract)\n' +
-      '- Reflection must feel earned, grounded, and slightly deeper than the opening\n' +
-      '- Avoid repeating the same angles, examples, or wording across versions\n\n' +
-      'Structure (AIR per version)\n' +
-      '1. Assertion (Hook)\n' +
-      '- Strong statement / contrarian insight / honest truth\n' +
-      '- Should feel bold, slightly provocative, or deeply relatable\n' +
-      '2. Illustration (Story)\n' +
-      '- Short, concrete real-life situation\n' +
-      '- Show behavior, not just explain\n' +
-      '- Keep it tight but vivid\n' +
-      '3. Reflection (Meaning)\n' +
-      '- Deeper realization or lesson\n' +
-      '- Reframe the assertion with more clarity\n' +
-      '- Should leave a lasting impression (save-worthy line)\n\n' +
-      'Generate 5 Distinct Versions\n' +
-      '- V1: Soft & reflective\n' +
-      '- V2: Deep & introspective\n' +
-      '- V3: Punchy & direct\n' +
-      '- V4: Story-heavy (illustration dominates)\n' +
-      '- V5: Reflection-heavy (ending is the strongest part)\n\n' +
-      'Output Format (VERY IMPORTANT)\n\n' +
-      'For each version, provide:\n\n' +
-      '1. Title (Angle)\n' +
-      '- Short phrase describing the core idea\n\n' +
-      '2. Hook Options (3 variations)\n' +
-      '- Different assertion lines for A/B testing\n\n' +
-      '3. Script (Ready to Read)\n' +
-      '- Natural flow, optimized for spoken delivery\n\n' +
-      '4. AIR Breakdown\n\n' +
-      '- Assertion:\n' +
-      '- Illustration:\n' +
-      '- Reflection:\n\n' +
-      '5. Delivery Direction\n\n' +
-      '- Tone (e.g., calm, firm, introspective)\n' +
-      '- Suggested pauses / emphasis\n' +
-      '- Facial expression / vibe\n\n' +
-      '6. Visual Direction (Simple)\n\n' +
-      '- A-roll idea (talking head)\n' +
-      '- Optional B-roll ideas (cutaways, environment, gestures)\n\n' +
-      '7. Caption (2 versions)\n\n' +
-      '- Version A: Insightful\n' +
-      '- Version B: Slightly punchy\n\n' +
-      '8. Reflection Line Alternatives (2 options)\n' +
-      '- Alternative closing lines for A/B testing\n\n' +
-      'Optional Optimization Layer\n\n' +
-      'Make each version slightly different in:\n\n' +
-      '- Emotional intensity (light vs deep)\n' +
-      '- Rhythm (slow reflective vs punchy cuts)\n' +
-      '- Directness (subtle vs bold)\n\n' +
-      'Information:\n' +
-      '[insert information]'
+    value: 'reflection',
+    label: 'Reflection - Meaning & personal insight',
+    frameworkName: 'Assertion-Illustration-Reflection',
+    frameworkFullName: 'Reflective Structure',
+    objective:
+      'Reshape the story into a reflective script that preserves the original meaning and emotional insight.',
+    tone:
+      'Reflective, slightly vulnerable, personal, and grounded in the source material.',
+    structureSteps: ['Assertion', 'Illustration', 'Reflection'],
+    structureGuidance: [
+      'Identify the core belief, realization, or emotional truth',
+      'Support it with the original lived moment, scene, or detail',
+      'End with a grounded reflection, not a newly invented moral',
+      'If the source is subtle, keep the reflection subtle'
+    ],
+    captionA: 'Insightful',
+    captionB: 'Slightly punchy',
+    closingLabel: 'Reflection Line Alternatives (2 options)',
+    closingHint: [
+      'Stay subtle and grounded',
+      'Do not overstate the message'
+    ],
+    extraCoreConstraints: [
+      'Do not fabricate a more dramatic illustration than what the source supports',
+      'Reflection must deepen the original meaning, not replace it'
+    ],
+    extraOutputRules: [
+      'Assertion must come from the source’s real stance',
+      'Illustration should come from the source material, not a new hypothetical scenario',
+      'Reflection should sound earned by the source material'
+    ]
   },
   {
-    value: 'par',
-    label: 'PAR - Great for life lessons',
-    content:
-      'Transform the following information into multiple high-performing Instagram Reels scripts using the PAR framework (Problem-Action-Result).\n\n' +
-      'Objective: Create authentic personal stories that feel real, relatable, and meaningful-showing a clear journey from struggle to insight.\n\n' +
-      'Tone: Conversational, honest, and grounded (like sharing a real experience, not teaching or lecturing).\n\n' +
-      'Core Constraints\n' +
-      '- Use simple, spoken Bahasa Indonesia (natural, human, not formal)\n' +
-      '- Avoid generic motivational or cliché phrases\n' +
-      '- The story must feel personal and specific (not generic storytelling)\n' +
-      '- Show emotional progression (struggle -> attempt -> realization)\n' +
-      '- Keep the action realistic (not overly dramatic or "perfect")\n' +
-      '- Result must feel honest (can be imperfect insight, not always a big win)\n' +
-      '- Avoid repeating the same angles, examples, or wording across versions\n\n' +
-      'Structure (PAR per version)\n' +
-      '1. Problem (Hook + Tension)\n' +
-      '- Start with a relatable struggle / internal conflict\n' +
-      '- Can be subtle (overthinking, delaying, confusion) or explicit\n' +
-      '- Should create curiosity or emotional tension\n' +
-      '2. Action (What You Did)\n' +
-      '- Realistic response to the problem\n' +
-      '- Could be flawed, hesitant, or experimental\n' +
-      '- Focus on behavior, not theory\n' +
-      '3. Result (Outcome + Insight)\n' +
-      '- What happened after\n' +
-      '- Include a reflection or lesson learned\n' +
-      '- Keep it grounded (not overly idealistic or preachy)\n\n' +
-      'Generate 5 Distinct Versions\n' +
-      '- V1: Soft & reflective\n' +
-      '- V2: Deep & introspective\n' +
-      '- V3: Punchy & direct\n' +
-      '- V4: Story-heavy (problem & action dominate)\n' +
-      '- V5: Insight-heavy (result is the strongest part)\n\n' +
-      'Output Format (VERY IMPORTANT)\n\n' +
-      'For each version, provide:\n\n' +
-      '1. Title (Angle)\n' +
-      '- Short phrase describing the core story\n\n' +
-      '2. Hook Options (3 variations)\n' +
-      '- Different opening lines for A/B testing (Problem-focused)\n\n' +
-      '3. Script (Ready to Read)\n' +
-      '- Natural flow, optimized for spoken delivery\n\n' +
-      '4. PAR Breakdown\n\n' +
-      '- Problem:\n' +
-      '- Action:\n' +
-      '- Result:\n\n' +
-      '5. Delivery Direction\n\n' +
-      '- Tone (e.g., vulnerable, calm, slightly frustrated, reflective)\n' +
-      '- Suggested pauses / emphasis\n' +
-      '- Facial expression / vibe\n\n' +
-      '6. Visual Direction (Simple)\n\n' +
-      '- A-roll idea (talking head / confessional style)\n' +
-      '- Optional B-roll ideas (daily activity, environment, gestures)\n\n' +
-      '7. Caption (2 versions)\n\n' +
-      '- Version A: Reflective\n' +
-      '- Version B: Slightly punchy\n\n' +
-      '8. Closing Line Alternatives (2 options)\n' +
-      '- Different ways to deliver the "Result" insight\n\n' +
-      'Optional Optimization Layer\n\n' +
-      'Make each version slightly different in:\n\n' +
-      '- Emotional intensity (subtle vs strong struggle)\n' +
-      '- Story pacing (slow reflection vs faster progression)\n' +
-      '- Outcome type (clear lesson vs open-ended realization)\n\n' +
-      'Information:\n' +
-      '[insert information]'
+    value: 'structured',
+    label: 'Structured - Clear & decisive communication',
+    frameworkName: 'Answer-Support-Detail',
+    frameworkFullName: 'Pyramid Principle (Simplified)',
+    objective:
+      'Restructure the story into a clear, top-down explanation that delivers the main idea first, followed by supporting points and brief details from the source.',
+    tone:
+      'Direct, efficient, and clear without losing the original voice or meaning.',
+    structureSteps: ['Answer', 'Support', 'Detail'],
+    structureGuidance: [
+      'Start with the main conclusion from the source',
+      'Support it with 2–3 key ideas already present in the source',
+      'Add brief supporting details only when they improve clarity',
+      'Avoid unnecessary storytelling or repetition'
+    ],
+    captionA: 'Insightful',
+    captionB: 'Slightly punchy',
+    closingLabel: 'Closing Line Alternatives (2 options)',
+    closingHint: [
+      'Reinforce clarity',
+      'Keep it concise and grounded'
+    ],
+    extraCoreConstraints: [
+      'Do not flatten a deeply personal story into cold corporate language',
+      'Do not add support points that are not already implied by the source'
+    ],
+    extraOutputRules: [
+      'Answer must present the source conclusion upfront',
+      'Support must organize the source logic into clear, non-overlapping points',
+      'Detail must stay brief and serve clarity, not expand the story'
+    ]
   },
   {
-    value: 'star',
-    label: 'STAR - Very strong for experience storytelling',
-    content:
-      'Transform the following information into multiple high-performing Instagram Reels scripts using the STAR framework (Situation-Task-Action-Result).\n\n' +
-      'Objective: Tell a clear, structured personal story that highlights a real situation, what needed to be done, what you actually did, and the insight gained-ending with a meaningful takeaway.\n\n' +
-      'Tone: Conversational, grounded, and reflective (like sharing a real experience with clarity, not lecturing).\n\n' +
-      'Core Constraints\n' +
-      '- Use simple, spoken Bahasa Indonesia (natural, human, not formal)\n' +
-      '- Keep the story concise and easy to follow\n' +
-      '- Avoid generic motivational or cliché phrases\n' +
-      '- Emphasize personal experience (specific, not abstract)\n' +
-      '- Show progression clearly (context -> responsibility -> action -> outcome)\n' +
-      '- Action must feel realistic (not overly perfect)\n' +
-      '- Result must include a grounded insight or realization\n' +
-      '- Avoid repeating the same angles, examples, or wording across versions\n\n' +
-      'Structure (STAR per version)\n' +
-      '1. Situation (Context)\n' +
-      '- Brief setup of the situation\n' +
-      '- What was happening / what condition you were in\n' +
-      '- Should quickly anchor the viewer\n' +
-      '2. Task (Challenge / Responsibility)\n' +
-      '- What needed to be done or resolved\n' +
-      '- Can be internal (e.g., "harus mulai") or external (deadline, expectation)\n' +
-      '3. Action (What You Did)\n' +
-      '- Specific steps or behavior\n' +
-      '- Keep it real (can include hesitation, trial, imperfection)\n' +
-      '4. Result (Outcome + Insight)\n' +
-      '- What happened afterward\n' +
-      '- Include a clear reflection or lesson learned\n' +
-      '- Should feel meaningful and applicable\n\n' +
-      'Generate 5 Distinct Versions\n' +
-      '- V1: Soft & reflective\n' +
-      '- V2: Deep & introspective\n' +
-      '- V3: Punchy & direct\n' +
-      '- V4: Story-heavy (situation & action dominate)\n' +
-      '- V5: Insight-heavy (result is the strongest part)\n\n' +
-      'Output Format (VERY IMPORTANT)\n\n' +
-      'For each version, provide:\n\n' +
-      '1. Title (Angle)\n' +
-      '- Short phrase describing the story\n\n' +
-      '2. Hook Options (3 variations)\n' +
-      '- Different opening lines (can start from Situation or tension point)\n\n' +
-      '3. Script (Ready to Read)\n' +
-      '- Natural flow, optimized for spoken delivery\n\n' +
-      '4. STAR Breakdown\n\n' +
-      '- Situation:\n' +
-      '- Task:\n' +
-      '- Action:\n' +
-      '- Result:\n\n' +
-      '5. Delivery Direction\n\n' +
-      '- Tone (e.g., calm, slightly pressured, reflective)\n' +
-      '- Suggested pauses / emphasis\n' +
-      '- Facial expression / vibe\n\n' +
-      '6. Visual Direction (Simple)\n\n' +
-      '- A-roll idea (talking head / storytelling style)\n' +
-      '- Optional B-roll ideas (daily activity, context visuals)\n\n' +
-      '7. Caption (2 versions)\n\n' +
-      '- Version A: Reflective\n' +
-      '- Version B: Slightly punchy\n\n' +
-      '8. Closing Insight Alternatives (2 options)\n' +
-      '- Different ways to deliver the "Result" takeaway\n\n' +
-      'Optional Optimization Layer\n\n' +
-      'Make each version slightly different in:\n\n' +
-      '- Emotional tone (light vs heavy)\n' +
-      '- Story pacing (fast vs reflective)\n' +
-      '- Outcome clarity (clear lesson vs subtle realization)\n\n' +
-      'Information:\n' +
-      '[insert information]'
+    value: 'engagement',
+    label: 'Engagement - Punchline & attention',
+    frameworkName: 'Setup-Twist-Punchline',
+    frameworkFullName: 'Comedic Structure',
+    objective:
+      'Restructure the story to highlight contrast and surprise using light comedic tension, while preserving the original meaning and voice.',
+    tone:
+      'Light, conversational, playful, and natural — not forced humor and not pure stand-up.',
+    structureSteps: ['Setup', 'Twist', 'Punchline'],
+    structureGuidance: [
+      'Build expectation from the original story',
+      'Introduce a subtle contrast, reversal, or tension already supported by the source',
+      'Deliver a punchline or sharp turn without changing the meaning',
+      'Keep the humor human and grounded'
+    ],
+    captionA: 'Slightly punchy',
+    captionB: 'Insightful',
+    closingLabel: 'Closing Line Alternatives (2 options)',
+    closingHint: [
+      'Keep it aligned with the original message',
+      'Avoid turning it into pure comedy'
+    ],
+    extraCoreConstraints: [
+      'Do not invent new jokes, characters, or events outside the source context',
+      'Humor should sharpen the original point, not overshadow it'
+    ],
+    extraOutputRules: [
+      'Setup must come from the source context',
+      'Twist must be supported by a real contrast or tension from the source',
+      'Punchline should feel like a sharper phrasing of the original meaning, not a random joke'
+    ]
   }
 ];
+
+export const contentIdeationFrameworks: FrameworkOption[] = FRAMEWORK_DEFINITIONS.map(
+  ({ value, label, ...definition }) => ({
+    value,
+    label,
+    content: buildFrameworkPrompt({
+      value,
+      label,
+      ...definition
+    })
+  })
+);
