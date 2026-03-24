@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { contentIdeationFrameworks } from '../data/contentIdeationFrameworks';
 import BasicDropdown from './BasicDropdown.vue';
 
 type SpeechRecognitionAlternative = {
@@ -44,91 +45,13 @@ const languageOptions = [
   { value: 'en-US', label: 'English' }
 ];
 const storytellingDurationOptions = [
-  { value: '90–110 kata', label: '45 seconds', duration: 45, wordRange: '90–110 kata' },
-  { value: '120–150 kata', label: '60 seconds', duration: 60, wordRange: '120–150 kata' },
-  { value: '180–220 kata', label: '90 seconds', duration: 90, wordRange: '180–220 kata' },
-  { value: '240–300 kata', label: '120 seconds', duration: 120, wordRange: '240–300 kata' }
-];
-
-type FrameworkOption = {
-  value: string;
-  label: string;
-  content: string;
-};
-
-const frameworks: FrameworkOption[] = [
-  {
-    value: 'prep',
-    label: 'PREP - Very popular for insight content',
-    content:
-      'Transform the following information into the PREP framework (Point–Reason–Example–Point) for an Instagram Reels personal storytelling video.\n' +
-      'The tone should feel reflective and conversational.\n' +
-      'End with a clear takeaway insight.\n\n' +
-      'Structure\n' +
-      '1. Point\n' +
-      '2. Reason\n' +
-      '3. Example\n' +
-      '4. Point\n\n' +
-      'Information:\n' +
-      '[insert information]'
-  },
-  {
-    value: 'see',
-    label: 'SEE - Very common for teaching/insight',
-    content:
-      'Convert the following information into the SEE framework (State–Explain–Example) for a short Instagram Reels storytelling format.\n' +
-      'Keep the explanation simple and end with a relatable example or personal reflection.\n\n' +
-      'Structure\n' +
-      '1. State\n' +
-      '2. Explain\n' +
-      '3. Example\n\n' +
-      'Information:\n' +
-      '[insert information]'
-  },
-  {
-    value: 'air',
-    label: 'AIR - Great for reflective storytelling',
-    content:
-      'Transform the following information into the AIR framework (Assertion–Illustration–Reflection) for an Instagram Reels personal insight story.\n' +
-      'Start with a strong statement, include a short real-life illustration, and end with a meaningful reflection.\n\n' +
-      'Structure\n' +
-      '1. Assertion\n' +
-      '2. Illustration\n' +
-      '3. Reflection\n\n' +
-      'Information:\n' +
-      '[insert information]'
-  },
-  {
-    value: 'par',
-    label: 'PAR - Great for life lessons',
-    content:
-      'Convert the following information into the PAR framework (Problem–Action–Result) as a short personal storytelling script for Instagram Reels.\n' +
-      'Make the story feel authentic and end with the result or lesson learned.\n\n' +
-      'Structure\n' +
-      '1. Problem\n' +
-      '2. Action\n' +
-      '3. Result\n\n' +
-      'Information:\n' +
-      '[insert information]'
-  },
-  {
-    value: 'star',
-    label: 'STAR - Very strong for experience storytelling',
-    content:
-      'Rewrite the following information using the STAR framework (Situation–Task–Action–Result) for an Instagram Reels storytelling video.\n' +
-      'Keep it concise and emphasize the personal experience and the final insight.\n\n' +
-      'Structure\n' +
-      '1. Situation\n' +
-      '2. Task\n' +
-      '3. Action\n' +
-      '4. Result\n\n' +
-      'Information:\n' +
-      '[insert information]'
-  }
+  { value: '240-300 words', label: '120 seconds', duration: 120, wordRange: '240-300 words' },
+  { value: '300-360 words', label: '150 seconds', duration: 150, wordRange: '300-360 words' },
+  { value: '360-420 words', label: '180 seconds', duration: 180, wordRange: '360-420 words' }
 ];
 
 const transcript = ref('');
-const selectedFramework = ref(frameworks[0].value);
+const selectedFramework = ref(contentIdeationFrameworks[0].value);
 const selectedLanguage = ref(languageOptions[0].value);
 const selectedStorytellingDuration = ref(storytellingDurationOptions[0].value);
 const isRecording = ref(false);
@@ -203,7 +126,7 @@ const releaseMicrophoneStream = (): void => {
 };
 
 const selectedFrameworkContent = computed(() => {
-  return frameworks.find((framework) => framework.value === selectedFramework.value)?.content ?? '';
+  return contentIdeationFrameworks.find((framework) => framework.value === selectedFramework.value)?.content ?? '';
 });
 
 const selectedStorytellingDurationMeta = computed(() => {
@@ -535,7 +458,7 @@ onBeforeUnmount(() => {
       <div class="mt-4">
         <p class="text-sm font-semibold text-slate-800">Outline Framework</p>
         <div class="mt-2">
-          <BasicDropdown v-model="selectedFramework" :options="frameworks" label="Select framework" />
+          <BasicDropdown v-model="selectedFramework" :options="contentIdeationFrameworks" label="Select framework" />
         </div>
       </div>
 
