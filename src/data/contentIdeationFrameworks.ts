@@ -158,6 +158,32 @@ const buildScriptSubheadingRules = (steps: string[]) =>
     '- Do not skip any subheading'
   ]);
 
+const buildAdditionalOutputFormattingPrompt = (definition: FrameworkDefinition) =>
+  [
+    'Additional Output Formatting Prompt (Markdown Block Style)',
+    '',
+    'Format the entire output into copy-paste ready Markdown element blocks with the following rules:',
+    '',
+    'Use only bold (**text**) and horizontal lines (---)',
+    'Do NOT use any Markdown headings such as #, ##, or ###',
+    'Each version (V1, V2, V3) must be placed in a separate Markdown code block',
+    'Inside each block:',
+    'Display the Title (Angle) in bold on the first line',
+    'Follow this exact structure and order:',
+    'Script (Ready to Read)',
+    ...definition.structureSteps,
+    '---',
+    'Caption',
+    'Version A',
+    'Version B',
+    '---',
+    definition.closingLabel.replace(' (2 options)', ''),
+    `All section labels (${definition.structureSteps.join(', ')}, etc.) must be in bold`,
+    'Maintain clean spacing so it is easy to read and fully ready to use without editing',
+    'Do not include any explanations outside the Markdown code blocks',
+    'Keep the output minimal, clean, and consistent across all versions'
+  ];
+
 const buildOutputFormatSection = (definition: FrameworkDefinition) =>
   joinLines([
     'Output Format (VERY IMPORTANT)',
@@ -183,6 +209,8 @@ const buildOutputFormatSection = (definition: FrameworkDefinition) =>
     '',
     `4. ${definition.closingLabel}`,
     ...definition.closingHint.map((item) => `- ${item}`),
+    '',
+    ...buildAdditionalOutputFormattingPrompt(definition),
     '',
     'Information:',
     '[insert information]'
