@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { stages, type StageId } from '../data/stages';
 import { getDefaultClientTagFromFilter, loadPersistedFilters } from '../lib/taskFilters';
@@ -14,7 +13,6 @@ import 'swiper/css';
 
 const store = useTodosStore();
 const authStore = useAuthStore();
-const router = useRouter();
 
 const isAddTaskSheetOpen = ref(false);
 const isProfileOpen = ref(false);
@@ -148,11 +146,6 @@ const closeProfile = (): void => {
   isProfileOpen.value = false;
 };
 
-const goToContentIdeation = async (): Promise<void> => {
-  closeProfile();
-  await router.push({ name: 'content-ideation' });
-};
-
 const hardRefresh = async (): Promise<void> => {
   closeProfile();
 
@@ -278,13 +271,6 @@ const signOut = async (): Promise<void> => {
       <button
         type="button"
         class="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-        @click="goToContentIdeation"
-      >
-        Content Outlining
-      </button>
-      <button
-        type="button"
-        class="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
         @click="hardRefresh"
       >
         Hard Refresh
