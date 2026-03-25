@@ -123,11 +123,6 @@ watch(
 );
 
 const goBack = (): void => {
-  if (window.history.length > 1) {
-    void router.back();
-    return;
-  }
-
   void router.replace({ name: 'home' });
 };
 
