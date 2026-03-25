@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { ref, watch } from 'vue';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
+import TeleprompterPanel from './TeleprompterPanel.vue';
 import {
   Bold,
   CodeXml,
@@ -31,6 +32,8 @@ const emit = defineEmits<{
   blur: [];
   commit: [];
 }>();
+
+const isTeleprompterOpen = ref(false);
 
 const normalizeCopiedText = (value: string): string =>
   value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -298,6 +301,8 @@ const setInlineLink = (): void => {
     <div class="mb-2">
       <h3 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-700">Full Content</h3>
       <div class="flex flex-wrap items-center gap-1.5">
+        <button type="button" class="editor-btn" @click="isTeleprompterOpen = true">Teleprompter</button>
+        <span class="editor-divider" aria-hidden="true" />
         <button
           type="button"
           class="editor-btn editor-btn-icon"
@@ -404,6 +409,12 @@ const setInlineLink = (): void => {
     <div class="rounded-xl border border-slate-300 bg-white ring-blue-300 focus-within:ring-2">
       <EditorContent :editor="editor" />
     </div>
+
+    <TeleprompterPanel
+      :visible="isTeleprompterOpen"
+      :content-html="modelValue"
+      @close="isTeleprompterOpen = false"
+    />
   </div>
 </template>
 
