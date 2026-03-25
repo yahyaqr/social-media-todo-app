@@ -104,6 +104,12 @@ type CapturedSample = {
   mappingName: string | null;
 };
 
+type AutoLabeledSample = CapturedSample & {
+  autoLabel: SampleLabel;
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+};
+
 const REMOTE_LOG_LIMIT = 60;
 const POINTER_MOVE_LOG_SAMPLE_LIMIT = 40;
 const MAX_STILLNESS_DISTANCE = 6;
@@ -135,7 +141,6 @@ const supportedRemoteKeys = new Set([
 const isRemoteListening = ref(false);
 const remoteListenerAttached = ref(false);
 const remoteInterceptEnabled = ref(true);
-const isSingleCaptureMode = ref(false);
 const isPointerMoveCaptureEnabled = ref(true);
 const isKeyboardCaptureEnabled = ref(true);
 const isRawClickCaptureEnabled = ref(true);
@@ -185,6 +190,11 @@ const mappingsExportText = computed(() =>
       signature: mapping.signature,
       assignedName: mapping.assignedName,
       sourceType: mapping.sourceType,
+      autoDetectedLabels: Array.from(new Set(
+        analyzedSamples.value
+          .filter((sample) => sample.signature === mapping.signature)
+          .map((sample) => sample.autoLabel)
+      )),
       sample: mapping.sample,
       updatedAt: mapping.updatedAt
     })),
@@ -194,11 +204,26 @@ const mappingsExportText = computed(() =>
 );
 
 const latestCapturedSample = computed(() => capturedSamples.value[0] ?? null);
+const latestAnalyzedSample = computed(() => analyzedSamples.value[0] ?? null);
 
 const rawSamplesExportText = computed(() => JSON.stringify(capturedSamples.value, null, 2));
 
 const labeledDatasetExportText = computed(() =>
-  JSON.stringify(capturedSamples.value.filter((sample) => sample.label), null, 2)
+  JSON.stringify(
+    analyzedSamples.value.map((sample) => ({
+      id: sample.id,
+      autoLabel: sample.autoLabel,
+      confidence: sample.confidence,
+      reason: sample.reason,
+      signature: sample.signature,
+      sourceType: sample.sourceType,
+      sourceChannel: sample.sourceChannel,
+      payload: sample.payload,
+      nearbyEvents: sample.nearbyEvents
+    })),
+    null,
+    2
+  )
 );
 
 const buildTimingSummary = (label: SampleLabel) => {
@@ -311,9 +336,185 @@ const camera1Diagnostic = computed(() => {
   };
 });
 
+const tapLikeGestureSamples = computed(() =>
+  capturedSamples.value.filter((sample) =>
+    sample.sourceType === 'gesture' &&
+    sample.payload.gestureType === 'tap-like' &&
+    typeof sample.payload.durationMs === 'number'
+  )
+);
+
+const tapDurationThreshold = computed(() => {
+  const durations = tapLikeGestureSamples.value
+    .map((sample) => sample.payload.durationMs)
+    .filter((value): value is number => typeof value === 'number')
+    .sort((left, right) => left - right);
+
+  if (!durations.length) {
+    return 22;
+  }
+
+  if (durations.length === 1) {
+    return durations[0] <= 22 ? 22 : 26;
+  }
+
+  let largestGap = 0;
+  let threshold = 22;
+
+  for (let index = 1; index < durations.length; index += 1) {
+    const gap = durations[index] - durations[index - 1];
+    if (gap > largestGap) {
+      largestGap = gap;
+      threshold = roundNumber((durations[index] + durations[index - 1]) / 2);
+    }
+  }
+
+  return largestGap >= 4 ? threshold : 22;
+});
+
+const deriveAutoLabelForSample = (sample: CapturedSample): Omit<AutoLabeledSample, keyof CapturedSample> => {
+  if (sample.label) {
+    return {
+      autoLabel: sample.label,
+      confidence: 'high',
+      reason: 'Manual label applied'
+    };
+  }
+
+  if (sample.sourceType === 'gesture') {
+    if (sample.payload.gestureType === 'drag-like') {
+      const direction = sample.payload.direction;
+      if (direction === 'right') return { autoLabel: 'left', confidence: 'high', reason: 'Drag right maps to LEFT arrow on this remote' };
+      if (direction === 'left') return { autoLabel: 'right', confidence: 'high', reason: 'Drag left maps to RIGHT arrow on this remote' };
+      if (direction === 'down') return { autoLabel: 'up', confidence: 'high', reason: 'Drag down maps to UP arrow on this remote' };
+      if (direction === 'up') return { autoLabel: 'down', confidence: 'high', reason: 'Drag up maps to DOWN arrow on this remote' };
+    }
+
+    if (sample.payload.gestureType === 'tap-like') {
+      const duration = typeof sample.payload.durationMs === 'number' ? sample.payload.durationMs : 0;
+      if (duration <= tapDurationThreshold.value) {
+        return { autoLabel: 'center', confidence: 'medium', reason: 'Short tap-like gesture cluster looks like CENTER' };
+      }
+      return { autoLabel: 'camera2', confidence: 'medium', reason: 'Longer tap-like gesture cluster looks like CAMERA2' };
+    }
+  }
+
+  const nearbyKeyboard = sample.sourceType === 'keyboard'
+    ? sample.payload
+    : sample.nearbyEvents.find((entry) => entry.type === 'keyboard')?.payload ?? null;
+
+  if (nearbyKeyboard && sample.sourceChannel !== 'pointer') {
+    const key = nearbyKeyboard.key;
+    if (isVolumeLikeKey(key)) {
+      return { autoLabel: 'camera1', confidence: 'high', reason: `Volume-like key ${String(key)} detected without pointer gesture` };
+    }
+    if (isMediaLikeKey(key)) {
+      return { autoLabel: 'camera1', confidence: 'medium', reason: `Media-like key ${String(key)} detected without pointer gesture` };
+    }
+  }
+
+  if (sample.sourceType === 'hid' && !sample.hasKeyboardEventNearby && sample.sourceChannel !== 'pointer') {
+    return { autoLabel: 'camera1', confidence: 'medium', reason: 'HID-only signal detected without pointer gesture' };
+  }
+
+  if (
+    sample.sourceType !== 'gesture' &&
+    sample.sourceChannel === 'unknown' &&
+    sample.hasFocusChangeNearby &&
+    !sample.hasKeyboardEventNearby &&
+    !sample.hasHidEventNearby
+  ) {
+    return { autoLabel: 'camera1', confidence: 'low', reason: 'No pointer event, but focus/visibility changed nearby; likely OS-consumed volume button' };
+  }
+
+  return { autoLabel: 'unknown', confidence: 'low', reason: 'Pattern does not clearly match a known remote button yet' };
+};
+
+const analyzedSamples = computed<AutoLabeledSample[]>(() =>
+  capturedSamples.value.map((sample) => ({
+    ...sample,
+    ...deriveAutoLabelForSample(sample)
+  }))
+);
+
+const discoveredButtons = computed(() => {
+  return sampleLabelOptions.map((label) => {
+    const samples = analyzedSamples.value.filter((sample) => sample.autoLabel === label);
+    const confidenceRank = { high: 3, medium: 2, low: 1 };
+    const strongest = samples.reduce<AutoLabeledSample | null>((best, sample) => {
+      if (!best) return sample;
+      return confidenceRank[sample.confidence] > confidenceRank[best.confidence] ? sample : best;
+    }, null);
+
+    return {
+      label,
+      detected: samples.length > 0,
+      sampleCount: samples.length,
+      confidence: strongest?.confidence ?? 'low',
+      reason: strongest?.reason ?? 'No matching pattern detected yet',
+      latestKey: samples.find((sample) => typeof sample.payload.key === 'string')?.payload.key ?? null
+    };
+  });
+});
+
+const laymanSummary = computed(() => {
+  const lines: string[] = [];
+  const arrows = discoveredButtons.value.filter((entry) => ['left', 'right', 'up', 'down'].includes(entry.label) && entry.detected);
+  if (arrows.length) {
+    lines.push(`Detected arrow-style drag buttons: ${arrows.map((entry) => entry.label.toUpperCase()).join(', ')}.`);
+  } else {
+    lines.push('No arrow-style drag buttons have been confidently detected yet.');
+  }
+
+  const center = discoveredButtons.value.find((entry) => entry.label === 'center');
+  const camera2 = discoveredButtons.value.find((entry) => entry.label === 'camera2');
+  if (center?.detected || camera2?.detected) {
+    lines.push(`Tap-like buttons are being separated into CENTER (${center?.sampleCount ?? 0} samples) and CAMERA2 (${camera2?.sampleCount ?? 0} samples).`);
+  } else {
+    lines.push('Tap-like buttons have not been separated into CENTER and CAMERA2 yet.');
+  }
+
+  if (camera1Diagnostic.value.verdict === 'likely media key') {
+    lines.push(`CAMERA1 likely behaves like a media or volume key${camera1Diagnostic.value.detectedKey ? ` (${camera1Diagnostic.value.detectedKey})` : ''}.`);
+  } else if (camera1Diagnostic.value.verdict === 'likely HID consumer control') {
+    lines.push('CAMERA1 likely behaves like an HID consumer-control button.');
+  } else if (camera1Diagnostic.value.verdict === 'likely OS-consumed volume button') {
+    lines.push('CAMERA1 may be consumed by the OS before the browser can see it.');
+  } else {
+    lines.push('CAMERA1 is not clearly visible yet; keep testing it several times while listening.');
+  }
+
+  const unknownCount = analyzedSamples.value.filter((sample) => sample.autoLabel === 'unknown').length;
+  lines.push(unknownCount ? `${unknownCount} captured samples are still unknown.` : 'All captured samples currently map to known button patterns.');
+
+  return lines;
+});
+
+const detailedLogExportText = computed(() =>
+  JSON.stringify(
+    {
+      exportedAt: new Date().toISOString(),
+      app: 'RemoteIdentifierPage',
+      listening: isRemoteListening.value,
+      highLevelSummary: laymanSummary.value,
+      buttonDiscovery: discoveredButtons.value,
+      camera1Diagnostic: camera1Diagnostic.value,
+      centerVsCamera2: centerVsCamera2Summary.value,
+      mappings: mappedButtons.value,
+      analyzedSamples: analyzedSamples.value,
+      rawEventLog: remoteLog.value,
+      nearbyEventBuffer: nearbyEventBuffer.value
+    },
+    null,
+    2
+  )
+);
+
 const exportSummaryText = computed(() =>
   JSON.stringify(
     {
+      laymanSummary: laymanSummary.value,
+      discoveredButtons: discoveredButtons.value,
       centerVsCamera2: centerVsCamera2Summary.value,
       camera1: camera1Summary.value,
       latestSampleDiagnostic: camera1Diagnostic.value
@@ -393,9 +594,7 @@ const writeRemoteLog = (type: RemoteLogType, payload: Record<string, unknown>): 
     payload
   };
 
-  remoteLog.value = isSingleCaptureMode.value
-    ? [nextEntry]
-    : [nextEntry, ...remoteLog.value].slice(0, REMOTE_LOG_LIMIT);
+  remoteLog.value = [nextEntry, ...remoteLog.value].slice(0, REMOTE_LOG_LIMIT);
 };
 
 const pushNearbyBufferedEvent = (type: RemoteLogType, payload: Record<string, unknown>, observedAt = performance.now()): void => {
@@ -1071,6 +1270,8 @@ const stopRemoteListening = (): void => {
 
 const clearRemoteLog = (): void => {
   remoteLog.value = [];
+  capturedSamples.value = [];
+  nearbyEventBuffer.value = [];
   lastRemoteKey.value = null;
   lastGamepadSnapshot = '';
   remoteDetectedCount.value = 0;
@@ -1085,7 +1286,7 @@ const copyRemoteLog = async (): Promise<void> => {
   isCopyingLog.value = true;
 
   try {
-    await navigator.clipboard.writeText(remoteLogText.value);
+    await navigator.clipboard.writeText(detailedLogExportText.value);
     writeRemoteLog('status', { status: 'copied-log' });
   } catch (error) {
     writeRemoteLog('error', { error: `Copy failed: ${String(error)}` });
@@ -1182,11 +1383,6 @@ const copyMappings = async (): Promise<void> => {
   } finally {
     isCopyingMappings.value = false;
   }
-};
-
-const assignLabelToSample = (sampleId: number, label: SampleLabel): void => {
-  capturedSamples.value = capturedSamples.value.map((sample) => sample.id === sampleId ? { ...sample, label } : sample);
-  writeRemoteLog('status', { status: 'sample-labeled', sampleId, label });
 };
 
 const copySamples = async (): Promise<void> => {
@@ -1427,20 +1623,17 @@ onBeforeUnmount(() => {
           </span>
         </label>
 
-        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-          <input
-            v-model="isSingleCaptureMode"
-            type="checkbox"
-            data-remote-ui-control="true"
-            class="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-          >
-          <span class="min-w-0">
-            <span class="block text-sm font-semibold text-slate-900">Single capture mode</span>
-            <span class="mt-1 block text-xs leading-5 text-slate-500">
-              Keep only the latest detected signature. Best when you want one clean mapping per button test.
-            </span>
-          </span>
-        </label>
+        <div class="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
+          <p class="text-sm font-semibold text-slate-900">
+            Simple workflow
+          </p>
+          <ol class="mt-2 space-y-1 text-xs leading-5 text-slate-700">
+            <li>1. Click <span class="font-semibold">Start listening</span>.</li>
+            <li>2. Press remote buttons several times, one button type at a time.</li>
+            <li>3. Watch <span class="font-semibold">Auto-detected buttons</span>.</li>
+            <li>4. Click <span class="font-semibold">Copy log</span> and paste it into ChatGPT if anything is unclear.</li>
+          </ol>
+        </div>
 
         <div class="grid grid-cols-2 gap-2">
           <div class="rounded-2xl bg-slate-50 px-3 py-3">
@@ -1472,10 +1665,59 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <p class="text-sm font-semibold text-slate-900">
+            What the page thinks is happening
+          </p>
+          <div class="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+            <p
+              v-for="line in laymanSummary"
+              :key="line"
+            >
+              {{ line }}
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <p class="text-sm font-semibold text-slate-900">
+            Auto-detected buttons
+          </p>
+          <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <div
+              v-for="entry in discoveredButtons"
+              :key="entry.label"
+              class="rounded-2xl border px-3 py-3"
+              :class="entry.detected ? 'border-emerald-200 bg-white' : 'border-slate-200 bg-white/70'"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-sm font-semibold text-slate-900">
+                  {{ entry.label }}
+                </p>
+                <span
+                  class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  :class="entry.detected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'"
+                >
+                  {{ entry.detected ? `${entry.confidence} confidence` : 'not found yet' }}
+                </span>
+              </div>
+              <p class="mt-2 text-xs leading-5 text-slate-600">
+                {{ entry.detected ? `${entry.sampleCount} sample(s). ${entry.reason}` : 'Press this button a few times while listening.' }}
+              </p>
+              <p
+                v-if="entry.latestKey"
+                class="mt-1 text-[11px] font-medium text-slate-500"
+              >
+                Key: {{ entry.latestKey }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="text-sm font-semibold text-slate-900">
-                Current detected signature
+                Last detected signature
               </p>
               <p class="mt-1 text-xs leading-5 text-slate-500">
                 {{ currentDetectedSourceType ? `Type: ${currentDetectedSourceType}` : 'Press a remote button to capture a signature.' }}
@@ -1525,115 +1767,50 @@ onBeforeUnmount(() => {
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="text-sm font-semibold text-slate-900">
-                Latest captured sample
+                Last detected button details
               </p>
               <p class="mt-1 text-xs leading-5 text-slate-500">
-                {{ latestCapturedSample ? `Channel: ${latestCapturedSample.sourceChannel} | Hint: ${latestCapturedSample.classificationHint}` : 'No sample captured yet.' }}
+                {{ latestAnalyzedSample ? `Looks like ${latestAnalyzedSample.autoLabel} | ${latestAnalyzedSample.confidence} confidence` : 'No sample captured yet.' }}
               </p>
             </div>
             <span
-              v-if="latestCapturedSample?.mappingName"
+              v-if="latestAnalyzedSample?.mappingName"
               class="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700"
             >
-              {{ latestCapturedSample.mappingName }}
+              {{ latestAnalyzedSample.mappingName }}
             </span>
           </div>
 
-          <div v-if="latestCapturedSample" class="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+          <div v-if="latestAnalyzedSample" class="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+            <p>
+              Reason:
+              <span class="font-medium text-slate-900">{{ latestAnalyzedSample.reason }}</span>
+            </p>
             <p>
               Flags:
               <span class="font-medium text-slate-900">
-                keyboard={{ latestCapturedSample.hasKeyboardEventNearby }},
-                hid={{ latestCapturedSample.hasHidEventNearby }},
-                gamepad={{ latestCapturedSample.hasGamepadEventNearby }},
-                focus={{ latestCapturedSample.hasFocusChangeNearby }}
+                keyboard={{ latestAnalyzedSample.hasKeyboardEventNearby }},
+                hid={{ latestAnalyzedSample.hasHidEventNearby }},
+                gamepad={{ latestAnalyzedSample.hasGamepadEventNearby }},
+                focus={{ latestAnalyzedSample.hasFocusChangeNearby }}
               </span>
             </p>
             <p
-              v-if="latestCapturedSample.sourceType === 'gesture'"
+              v-if="latestAnalyzedSample.sourceType === 'gesture'"
               class="break-all rounded-xl bg-white px-3 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200"
             >
-              duration={{ latestCapturedSample.payload.durationMs ?? 'n/a' }}ms,
-              pointerDown={{ latestCapturedSample.payload.pointerDownAt ?? 'n/a' }},
-              pointerUp={{ latestCapturedSample.payload.pointerUpAt ?? 'n/a' }},
-              click={{ latestCapturedSample.payload.clickAt ?? 'n/a' }},
-              clickDelay={{ latestCapturedSample.payload.clickDelayMs ?? 'n/a' }}ms
+              duration={{ latestAnalyzedSample.payload.durationMs ?? 'n/a' }}ms,
+              pointerDown={{ latestAnalyzedSample.payload.pointerDownAt ?? 'n/a' }},
+              pointerUp={{ latestAnalyzedSample.payload.pointerUpAt ?? 'n/a' }},
+              click={{ latestAnalyzedSample.payload.clickAt ?? 'n/a' }},
+              clickDelay={{ latestAnalyzedSample.payload.clickDelayMs ?? 'n/a' }}ms
             </p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="label in sampleLabelOptions"
-                :key="label"
-                type="button"
-                data-remote-ui-control="true"
-                class="inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold transition active:scale-[0.99]"
-                :class="latestCapturedSample.label === label ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
-                @click="assignLabelToSample(latestCapturedSample.id, label)"
-              >
-                {{ label }}
-              </button>
-            </div>
             <details class="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
               <summary class="cursor-pointer text-xs font-semibold text-slate-700">
-                Nearby events ({{ latestCapturedSample.nearbyEvents.length }})
+                Nearby events ({{ latestAnalyzedSample.nearbyEvents.length }})
               </summary>
-              <pre class="mt-2 overflow-auto text-[11px] leading-5 text-slate-700">{{ JSON.stringify(latestCapturedSample.nearbyEvents, null, 2) }}</pre>
+              <pre class="mt-2 overflow-auto text-[11px] leading-5 text-slate-700">{{ JSON.stringify(latestAnalyzedSample.nearbyEvents, null, 2) }}</pre>
             </details>
-          </div>
-        </div>
-
-        <div class="rounded-2xl border border-dashed border-slate-300 px-3 py-3">
-          <p class="text-sm font-semibold text-slate-900">
-            Center vs Camera2
-          </p>
-          <div class="mt-2 space-y-2 text-xs leading-5 text-slate-600">
-            <p>
-              Center:
-              <span class="font-medium text-slate-900">
-                count={{ centerVsCamera2Summary.center.count }},
-                min={{ centerVsCamera2Summary.center.minDuration ?? 'n/a' }}ms,
-                max={{ centerVsCamera2Summary.center.maxDuration ?? 'n/a' }}ms,
-                avg={{ centerVsCamera2Summary.center.avgDuration ?? 'n/a' }}ms,
-                clickDelayAvg={{ centerVsCamera2Summary.center.avgClickDelay ?? 'n/a' }}ms
-              </span>
-            </p>
-            <p>
-              Camera2:
-              <span class="font-medium text-slate-900">
-                count={{ centerVsCamera2Summary.camera2.count }},
-                min={{ centerVsCamera2Summary.camera2.minDuration ?? 'n/a' }}ms,
-                max={{ centerVsCamera2Summary.camera2.maxDuration ?? 'n/a' }}ms,
-                avg={{ centerVsCamera2Summary.camera2.avgDuration ?? 'n/a' }}ms,
-                clickDelayAvg={{ centerVsCamera2Summary.camera2.avgClickDelay ?? 'n/a' }}ms
-              </span>
-            </p>
-            <p class="font-medium text-slate-900">
-              Stable timing difference:
-              {{ centerVsCamera2Summary.stableTimingDifference ? 'yes' : 'not yet' }}
-            </p>
-          </div>
-        </div>
-
-        <div class="rounded-2xl border border-dashed border-slate-300 px-3 py-3">
-          <p class="text-sm font-semibold text-slate-900">
-            Camera1 diagnostic
-          </p>
-          <div class="mt-2 space-y-2 text-xs leading-5 text-slate-600">
-            <p>Was a keyboard event detected? <span class="font-medium text-slate-900">{{ camera1Diagnostic.keyboardDetected ? 'yes' : 'no' }}</span></p>
-            <p>Which key? <span class="font-medium text-slate-900">{{ camera1Diagnostic.detectedKey ?? 'none' }}</span></p>
-            <p>Was it volume-related? <span class="font-medium text-slate-900">{{ camera1Diagnostic.isVolumeRelated ? 'yes' : 'no' }}</span></p>
-            <p>Was there no pointer gesture? <span class="font-medium text-slate-900">{{ camera1Diagnostic.noPointerGesture ? 'yes' : 'no' }}</span></p>
-            <p>Was there any HID signal? <span class="font-medium text-slate-900">{{ camera1Diagnostic.hidDetected ? 'yes' : 'no' }}</span></p>
-            <p class="font-medium text-slate-900">Summary: {{ camera1Diagnostic.verdict }}</p>
-            <p>
-              Camera1 labeled samples:
-              <span class="font-medium text-slate-900">
-                count={{ camera1Summary.count }},
-                keyboardOnly={{ camera1Summary.keyboardOnlyCount }},
-                pointerMissing={{ camera1Summary.pointerMissingCount }},
-                keys={{ camera1Summary.detectedKeys.join(', ') || 'none' }},
-                volumeKeys={{ camera1Summary.volumeKeys.join(', ') || 'none' }}
-              </span>
-            </p>
           </div>
         </div>
 
@@ -1698,10 +1875,10 @@ onBeforeUnmount(() => {
               type="button"
               data-remote-ui-control="true"
               class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="isCopyingLabeledDataset || !capturedSamples.some((sample) => sample.label)"
+              :disabled="isCopyingLabeledDataset || !analyzedSamples.length"
               @click="copyLabeledDataset"
             >
-              {{ isCopyingLabeledDataset ? 'Copying...' : 'Copy labeled dataset' }}
+              {{ isCopyingLabeledDataset ? 'Copying...' : 'Copy auto-labeled dataset' }}
             </button>
             <button
               type="button"
@@ -1718,7 +1895,7 @@ onBeforeUnmount(() => {
         <div>
           <div class="flex items-center justify-between gap-3">
             <p class="text-sm font-semibold text-slate-900">
-              Event log
+              Detailed report
             </p>
 
             <div class="flex items-center gap-3">
@@ -1729,7 +1906,7 @@ onBeforeUnmount(() => {
                 :disabled="isCopyingLog"
                 @click="copyRemoteLog"
               >
-                {{ isCopyingLog ? 'Copying...' : 'Copy' }}
+                {{ isCopyingLog ? 'Copying...' : 'Copy log' }}
               </button>
 
               <button
@@ -1743,6 +1920,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <p class="mt-2 text-xs leading-5 text-slate-500">
+            This panel shows the raw event stream. Use <span class="font-semibold text-slate-700">Copy log</span> to export the full analysis report for ChatGPT.
+          </p>
           <pre class="mt-2 max-h-[30rem] overflow-auto rounded-2xl bg-slate-950 px-3 py-3 text-[11px] leading-5 text-slate-100 [scrollbar-width:thin]">{{ remoteLogText }}</pre>
         </div>
 
