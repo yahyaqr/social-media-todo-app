@@ -49,6 +49,7 @@ const scrollSpeed = ref(DEFAULT_SPEED);
 const isAutoScrolling = ref(false);
 const scrollTop = ref(0);
 const scrollPosition = ref(0);
+const elapsedTimeMs = ref(0);
 
 const panelBody = ref<HTMLElement | null>(null);
 const dragState = ref<DragState | null>(null);
@@ -58,6 +59,13 @@ let animationFrameId = 0;
 let lastFrameTime = 0;
 
 const safeContentHtml = computed(() => props.contentHtml || '<p></p>');
+const formattedElapsedTime = computed(() => {
+  const totalSeconds = Math.floor(elapsedTimeMs.value / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+});
 
 const getViewportWidth = (): number => window.innerWidth;
 const getViewportHeight = (): number => window.innerHeight;
@@ -115,6 +123,7 @@ const tickAutoScroll = (timestamp: number): void => {
 
   const elapsedMs = timestamp - lastFrameTime;
   lastFrameTime = timestamp;
+  elapsedTimeMs.value += elapsedMs;
 
   const maxScrollTop = Math.max(0, panelBody.value.scrollHeight - panelBody.value.clientHeight);
   const nextScrollTop = Math.min(
@@ -148,6 +157,7 @@ const startAutoScroll = (): void => {
   }
 
   cancelAutoScroll();
+  elapsedTimeMs.value = 0;
   scrollPosition.value = panelBody.value.scrollTop;
   isAutoScrolling.value = true;
   animationFrameId = window.requestAnimationFrame(tickAutoScroll);
@@ -305,6 +315,7 @@ watch(
       stopAutoScroll();
       scrollTop.value = 0;
       scrollPosition.value = 0;
+      elapsedTimeMs.value = 0;
 
       window.addEventListener('pointermove', handlePointerMove);
       window.addEventListener('pointerup', handlePointerUp);
@@ -316,6 +327,7 @@ watch(
     dragState.value = null;
     resizeState.value = null;
     stopAutoScroll();
+    elapsedTimeMs.value = 0;
 
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
@@ -334,6 +346,7 @@ watch(
     stopAutoScroll();
     scrollTop.value = 0;
     scrollPosition.value = 0;
+    elapsedTimeMs.value = 0;
     syncScrollPosition();
   }
 );
@@ -353,8 +366,7 @@ onBeforeUnmount(() => {
     class="fixed inset-0 z-[80] pointer-events-auto"
   >
     <div
-      class="absolute inset-0 bg-black/80"
-      @click="emit('close')"
+      class="absolute inset-0 bg-black/95"
     />
 
     <section
@@ -370,13 +382,27 @@ onBeforeUnmount(() => {
       }"
     >
       <header
-        class="flex cursor-grab select-none items-center justify-center border-b border-slate-400/20 bg-slate-900/92 px-4 py-3 touch-none max-sm:px-3.5"
+        class="relative flex cursor-grab select-none items-center justify-center border-b border-slate-400/20 bg-slate-900/92 px-4 py-3 touch-none max-sm:px-3.5"
         @pointerdown="onDragPointerDown"
       >
+        <button
+          type="button"
+          class="absolute left-3 z-[999] pointer-events-auto inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-800/80 hover:text-slate-100 max-sm:left-2.5"
+          aria-label="Close teleprompter"
+          title="Close teleprompter"
+          @pointerdown.stop
+          @mousedown.stop
+          @click.stop="emit('close')"
+        >
+          <X class="h-3 w-3" />
+        </button>
         <div
           aria-hidden="true"
           class="h-1.5 w-16 rounded-full bg-slate-500/65 shadow-[0_0_0_1px_rgba(148,163,184,0.12)]"
         />
+        <span class="pointer-events-none absolute right-3 text-[10px] font-medium tabular-nums text-slate-400 max-sm:right-2.5">
+          {{ formattedElapsedTime }}
+        </span>
       </header>
 
       <div
