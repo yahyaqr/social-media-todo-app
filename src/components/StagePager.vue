@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/auth';
 import { useTodosStore } from '../stores/todos';
 import AddTaskSheet from './AddTaskSheet.vue';
 import CalendarPage from './CalendarPage.vue';
+import RemoteIdentifierPage from './RemoteIdentifierPage.vue';
 import StagePage from './StagePage.vue';
 
 import 'swiper/css';
@@ -18,8 +19,7 @@ const isAddTaskSheetOpen = ref(false);
 const isProfileOpen = ref(false);
 const LEGACY_STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
 const SLIDE_INDEX_STORAGE_KEY = 'social-todo:active-slide-index';
-const CALENDAR_SLIDE_INDEX = 0;
-const FIRST_STAGE_SLIDE_INDEX = 1;
+const FIRST_STAGE_SLIDE_INDEX = 2;
 
 const getTodayStageIndex = (): number => {
   const today = new Date().getDay();
@@ -63,7 +63,7 @@ const getStoredSlideIndex = (): number | null => {
 
 const activeSlideIndex = ref(getStoredSlideIndex() ?? todayStageIndex.value + FIRST_STAGE_SLIDE_INDEX);
 const activeStageIndex = computed(() => Math.max(0, activeSlideIndex.value - FIRST_STAGE_SLIDE_INDEX));
-const isCalendarSlideActive = computed(() => activeSlideIndex.value === CALENDAR_SLIDE_INDEX);
+const isTaskStageSlideActive = computed(() => activeSlideIndex.value >= FIRST_STAGE_SLIDE_INDEX);
 
 const activeStageId = computed<StageId>(() => {
   const stage = stages[activeStageIndex.value];
@@ -191,6 +191,9 @@ const signOut = async (): Promise<void> => {
       @realIndexChange="syncActiveStageIndex"
     >
       <SwiperSlide class="h-full bg-slate-100">
+        <RemoteIdentifierPage />
+      </SwiperSlide>
+      <SwiperSlide class="h-full bg-slate-100">
         <CalendarPage />
       </SwiperSlide>
       <SwiperSlide v-for="(stage, index) in stages" :key="stage.id" class="h-full bg-slate-100">
@@ -209,7 +212,7 @@ const signOut = async (): Promise<void> => {
     />
 
     <div
-      v-if="!isAddTaskSheetOpen && !isCalendarSlideActive"
+      v-if="!isAddTaskSheetOpen && isTaskStageSlideActive"
       class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex w-full -translate-x-1/2 items-center justify-between gap-2 px-4"
     >
       <button
