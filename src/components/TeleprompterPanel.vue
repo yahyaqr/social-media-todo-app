@@ -233,11 +233,9 @@ const handleRemoteTeleprompterEvent = (payload: RemoteEventPayload): void => {
       adjustScrollSpeed(1);
       break;
     case 'camera1':
-      adjustFontSize(-1);
+      toggleAutoScroll();
       break;
     case 'camera2':
-      adjustFontSize(1);
-      break;
     case 'unknown':
       break;
   }

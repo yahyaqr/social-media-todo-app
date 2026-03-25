@@ -80,6 +80,7 @@ export type UseBluetoothRemoteTeleprompterOptions = {
   enableExperimentalCamera2Split?: boolean;
   camera2MinDurationMs?: number;
   camera2MaxDurationMs?: number;
+  keyboardCamera1FallbackDebounceMs?: number;
   onRemoteEvent?: (payload: RemoteEventPayload) => void;
 };
 
@@ -248,6 +249,17 @@ const DEFAULT_MAPPINGS: RemoteMappingRule[] = [
     }
   },
   {
+    id: 'keyboard-camera1-audio-volume-up',
+    source: 'keyboard',
+    action: 'camera1',
+    keyboard: {
+      eventType: 'keydown',
+      key: 'AudioVolumeUp',
+      keyCode: 175,
+      which: 175
+    }
+  },
+  {
     id: 'keyboard-camera1-audio-volume-down',
     source: 'keyboard',
     action: 'camera1',
@@ -282,6 +294,7 @@ export function useBluetoothRemoteTeleprompter(
     enableExperimentalCamera2Split = false,
     camera2MinDurationMs = 24,
     camera2MaxDurationMs = 40,
+    keyboardCamera1FallbackDebounceMs = 260,
     onRemoteEvent
   } = options;
 
@@ -294,6 +307,8 @@ export function useBluetoothRemoteTeleprompter(
   let activePointerSession: PointerSession | null = null;
   let connectedHidDevice: HidDeviceLike | null = null;
   const lastFiredAtByAction = new Map<RemoteAction, number>();
+  let lastPointerTapAt = 0;
+  let lastKeyboardCamera1At = 0;
 
   const enabledMappings = computed(() =>
     runtimeMappings.value.filter((rule) => rule.enabled !== false)
@@ -475,6 +490,7 @@ export function useBluetoothRemoteTeleprompter(
 
     if (gesture.gestureType === 'tap-like') {
       const inferredAction = classifyTapAction(gesture);
+      lastPointerTapAt = performance.now();
 
       pushEvent({
         action: inferredAction,
@@ -552,6 +568,23 @@ export function useBluetoothRemoteTeleprompter(
     const matchedRule = matchKeyboardRule(event);
     if (!matchedRule) return;
 
+    const now = performance.now();
+
+    if (matchedRule.action === 'camera1') {
+      const hasRecentPointerTap = now - lastPointerTapAt < keyboardCamera1FallbackDebounceMs;
+      const hasRecentCamera1KeyboardToggle = now - lastKeyboardCamera1At < keyboardCamera1FallbackDebounceMs;
+
+      if (hasRecentPointerTap || hasRecentCamera1KeyboardToggle) {
+        logDebug('keyboard-camera1-fallback-skipped', {
+          key: event.key,
+          reason: hasRecentPointerTap ? 'recent-pointer-tap' : 'recent-camera1-keyboard-fallback'
+        });
+        return;
+      }
+
+      lastKeyboardCamera1At = now;
+    }
+
     event.preventDefault();
     event.stopPropagation();
 
@@ -559,7 +592,7 @@ export function useBluetoothRemoteTeleprompter(
       action: matchedRule.action,
       source: 'keyboard',
       rawType: event.type,
-      timestamp: performance.now(),
+      timestamp: now,
       confidence: 0.92,
       detail: {
         key: event.key,
@@ -690,6 +723,8 @@ export function useBluetoothRemoteTeleprompter(
     recentEvents.value = [];
     lastRemoteEvent.value = null;
     lastFiredAtByAction.clear();
+    lastPointerTapAt = 0;
+    lastKeyboardCamera1At = 0;
   };
 
   onMounted(() => {
