@@ -19,7 +19,8 @@ const isAddTaskSheetOpen = ref(false);
 const isProfileOpen = ref(false);
 const LEGACY_STAGE_INDEX_STORAGE_KEY = 'social-todo:active-stage-index';
 const SLIDE_INDEX_STORAGE_KEY = 'social-todo:active-slide-index';
-const FIRST_STAGE_SLIDE_INDEX = 2;
+const SHOW_REMOTE_IDENTIFIER_PAGE = false;
+const FIRST_STAGE_SLIDE_INDEX = SHOW_REMOTE_IDENTIFIER_PAGE ? 2 : 1;
 
 const getTodayStageIndex = (): number => {
   const today = new Date().getDay();
@@ -190,7 +191,10 @@ const signOut = async (): Promise<void> => {
       @activeIndexChange="syncActiveStageIndex"
       @realIndexChange="syncActiveStageIndex"
     >
-      <SwiperSlide class="h-full bg-slate-100">
+      <SwiperSlide
+        v-if="SHOW_REMOTE_IDENTIFIER_PAGE"
+        class="h-full bg-slate-100"
+      >
         <RemoteIdentifierPage />
       </SwiperSlide>
       <SwiperSlide class="h-full bg-slate-100">
