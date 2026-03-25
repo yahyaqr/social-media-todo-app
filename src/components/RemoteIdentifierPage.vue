@@ -110,6 +110,17 @@ type AutoLabeledSample = CapturedSample & {
   reason: string;
 };
 
+type TapClusterStats = {
+  label: 'center' | 'camera2';
+  count: number;
+  durations: number[];
+  clickDelays: number[];
+  keyboardKeys: string[];
+  hidFingerprints: string[];
+  mouseSequences: string[];
+  focusChangeCount: number;
+};
+
 const REMOTE_LOG_LIMIT = 60;
 const POINTER_MOVE_LOG_SAMPLE_LIMIT = 40;
 const MAX_STILLNESS_DISTANCE = 6;
@@ -250,6 +261,107 @@ const buildTimingSummary = (label: SampleLabel) => {
 const centerTimingSummary = computed(() => buildTimingSummary('center'));
 const camera2TimingSummary = computed(() => buildTimingSummary('camera2'));
 
+const getTapClusterLabel = (sample: CapturedSample): 'center' | 'camera2' | null => {
+  if (sample.sourceType !== 'gesture' || sample.payload.gestureType !== 'tap-like') {
+    return null;
+  }
+
+  if (sample.label === 'center' || sample.label === 'camera2') {
+    return sample.label;
+  }
+
+  const duration = typeof sample.payload.durationMs === 'number' ? sample.payload.durationMs : null;
+  if (duration === null) {
+    return null;
+  }
+
+  return duration <= tapDurationThreshold.value ? 'center' : 'camera2';
+};
+
+const getSampleKeyboardKeys = (sample: CapturedSample): string[] => {
+  return uniqueStrings(
+    [
+      sample.sourceType === 'keyboard' && typeof sample.payload.key === 'string' ? sample.payload.key : '',
+      ...sample.nearbyEvents
+        .filter((entry) => entry.type === 'keyboard' && typeof entry.payload.key === 'string')
+        .map((entry) => String(entry.payload.key))
+    ].filter(Boolean) as string[]
+  );
+};
+
+const getSampleHidFingerprints = (sample: CapturedSample): string[] => {
+  return uniqueStrings(
+    [
+      sample.sourceType === 'hid'
+        ? JSON.stringify({
+            reportId: sample.payload.reportId ?? null,
+            bytes: sample.payload.bytes ?? null
+          })
+        : '',
+      ...sample.nearbyEvents
+        .filter((entry) => entry.type === 'hid')
+        .map((entry) =>
+          JSON.stringify({
+            reportId: entry.payload.reportId ?? null,
+            bytes: entry.payload.bytes ?? null
+          })
+        )
+    ].filter(Boolean) as string[]
+  );
+};
+
+const getSampleMouseSequence = (sample: CapturedSample): string => {
+  const sequence = sample.nearbyEvents
+    .filter((entry) => entry.type === 'pointer' || entry.type === 'input')
+    .map((entry) => {
+      const eventType = typeof entry.payload.eventType === 'string' ? entry.payload.eventType : entry.type;
+      return `${entry.type}:${eventType}`;
+    });
+
+  return sequenceFingerprint(sequence);
+};
+
+const buildTapClusterStats = (label: 'center' | 'camera2'): TapClusterStats => {
+  const samples = capturedSamples.value.filter((sample) => getTapClusterLabel(sample) === label);
+
+  return {
+    label,
+    count: samples.length,
+    durations: samples
+      .map((sample) => sample.payload.durationMs)
+      .filter((value): value is number => typeof value === 'number'),
+    clickDelays: samples
+      .map((sample) => sample.payload.clickDelayMs)
+      .filter((value): value is number => typeof value === 'number'),
+    keyboardKeys: uniqueStrings(samples.flatMap((sample) => getSampleKeyboardKeys(sample))),
+    hidFingerprints: uniqueStrings(samples.flatMap((sample) => getSampleHidFingerprints(sample))),
+    mouseSequences: uniqueStrings(samples.map((sample) => getSampleMouseSequence(sample)).filter(Boolean)),
+    focusChangeCount: samples.filter((sample) => sample.hasFocusChangeNearby).length
+  };
+};
+
+const getTimingOverlapLevel = (left: number[], right: number[]): 'none' | 'partial' | 'heavy' => {
+  if (!left.length || !right.length) {
+    return 'heavy';
+  }
+
+  const leftMin = Math.min(...left);
+  const leftMax = Math.max(...left);
+  const rightMin = Math.min(...right);
+  const rightMax = Math.max(...right);
+
+  if (leftMax < rightMin || rightMax < leftMin) {
+    return 'none';
+  }
+
+  const overlap = Math.min(leftMax, rightMax) - Math.max(leftMin, rightMin);
+  const leftSpan = Math.max(leftMax - leftMin, 1);
+  const rightSpan = Math.max(rightMax - rightMin, 1);
+  const overlapRatio = overlap / Math.max(leftSpan, rightSpan);
+
+  return overlapRatio < 0.35 ? 'partial' : 'heavy';
+};
+
 const centerVsCamera2Summary = computed(() => {
   const center = centerTimingSummary.value;
   const camera2 = camera2TimingSummary.value;
@@ -264,6 +376,90 @@ const centerVsCamera2Summary = computed(() => {
     center,
     camera2,
     stableTimingDifference
+  };
+});
+
+const centerCamera2DetailedComparison = computed(() => {
+  const centerCluster = buildTapClusterStats('center');
+  const camera2Cluster = buildTapClusterStats('camera2');
+  const durationOverlap = getTimingOverlapLevel(centerCluster.durations, camera2Cluster.durations);
+  const clickDelayOverlap = getTimingOverlapLevel(centerCluster.clickDelays, camera2Cluster.clickDelays);
+  const keyboardOverlap = countUniqueOverlap(centerCluster.keyboardKeys, camera2Cluster.keyboardKeys);
+  const hidOverlap = countUniqueOverlap(centerCluster.hidFingerprints, camera2Cluster.hidFingerprints);
+  const mouseSequenceOverlap = countUniqueOverlap(centerCluster.mouseSequences, camera2Cluster.mouseSequences);
+
+  const uniqueCenterHid = centerCluster.hidFingerprints.filter((value) => !camera2Cluster.hidFingerprints.includes(value));
+  const uniqueCamera2Hid = camera2Cluster.hidFingerprints.filter((value) => !centerCluster.hidFingerprints.includes(value));
+  const uniqueCenterKeys = centerCluster.keyboardKeys.filter((value) => !camera2Cluster.keyboardKeys.includes(value));
+  const uniqueCamera2Keys = camera2Cluster.keyboardKeys.filter((value) => !centerCluster.keyboardKeys.includes(value));
+  const uniqueCenterMouseSequences = centerCluster.mouseSequences.filter((value) => !camera2Cluster.mouseSequences.includes(value));
+  const uniqueCamera2MouseSequences = camera2Cluster.mouseSequences.filter((value) => !centerCluster.mouseSequences.includes(value));
+
+  let verdict = 'not enough samples yet';
+  let confidence: 'high' | 'medium' | 'low' = 'low';
+  let strongestFeatures: string[] = [];
+
+  if (uniqueCenterHid.length || uniqueCamera2Hid.length) {
+    verdict = 'distinguishable via HID correlation';
+    confidence = 'high';
+    strongestFeatures = [
+      ...(uniqueCenterHid.length ? [`center unique HID: ${uniqueCenterHid[0]}`] : []),
+      ...(uniqueCamera2Hid.length ? [`camera2 unique HID: ${uniqueCamera2Hid[0]}`] : [])
+    ];
+  } else if (uniqueCenterKeys.length || uniqueCamera2Keys.length) {
+    verdict = 'distinguishable via keyboard/media correlation';
+    confidence = 'high';
+    strongestFeatures = [
+      ...(uniqueCenterKeys.length ? [`center unique key: ${uniqueCenterKeys[0]}`] : []),
+      ...(uniqueCamera2Keys.length ? [`camera2 unique key: ${uniqueCamera2Keys[0]}`] : [])
+    ];
+  } else if (uniqueCenterMouseSequences.length || uniqueCamera2MouseSequences.length) {
+    verdict = 'distinguishable via mouse event sequence';
+    confidence = 'high';
+    strongestFeatures = [
+      ...(uniqueCenterMouseSequences.length ? [`center sequence: ${uniqueCenterMouseSequences[0]}`] : []),
+      ...(uniqueCamera2MouseSequences.length ? [`camera2 sequence: ${uniqueCamera2MouseSequences[0]}`] : [])
+    ];
+  } else if (
+    centerCluster.count >= 10 &&
+    camera2Cluster.count >= 10 &&
+    durationOverlap !== 'heavy' &&
+    clickDelayOverlap !== 'heavy'
+  ) {
+    verdict = 'distinguishable via stable timing only';
+    confidence = 'medium';
+    strongestFeatures = ['duration and click-delay distributions are separated enough across repeated samples'];
+  } else if (
+    centerCluster.count >= 12 &&
+    camera2Cluster.count >= 12 &&
+    durationOverlap === 'heavy' &&
+    clickDelayOverlap === 'heavy' &&
+    keyboardOverlap > 0 &&
+    hidOverlap === 0 &&
+    mouseSequenceOverlap > 0
+  ) {
+    verdict = 'center and camera2 appear browser-identical';
+    confidence = 'low';
+    strongestFeatures = ['timing and nearby-event patterns overlap heavily'];
+  }
+
+  return {
+    centerCluster,
+    camera2Cluster,
+    durationOverlap,
+    clickDelayOverlap,
+    keyboardOverlap,
+    hidOverlap,
+    mouseSequenceOverlap,
+    uniqueCenterHid,
+    uniqueCamera2Hid,
+    uniqueCenterKeys,
+    uniqueCamera2Keys,
+    uniqueCenterMouseSequences,
+    uniqueCamera2MouseSequences,
+    verdict,
+    confidence,
+    strongestFeatures
   };
 });
 
@@ -391,11 +587,35 @@ const deriveAutoLabelForSample = (sample: CapturedSample): Omit<AutoLabeledSampl
     }
 
     if (sample.payload.gestureType === 'tap-like') {
-      const duration = typeof sample.payload.durationMs === 'number' ? sample.payload.durationMs : 0;
-      if (duration <= tapDurationThreshold.value) {
-        return { autoLabel: 'center', confidence: 'medium', reason: 'Short tap-like gesture cluster looks like CENTER' };
+      const clusterLabel = getTapClusterLabel(sample);
+      const comparison = centerCamera2DetailedComparison.value;
+      const confidence = comparison.confidence === 'high'
+        ? 'high'
+        : comparison.confidence === 'medium'
+          ? 'medium'
+          : 'low';
+
+      if (comparison.verdict === 'center and camera2 appear browser-identical') {
+        return {
+          autoLabel: 'unknown',
+          confidence: 'low',
+          reason: 'Tap-like buttons still look browser-identical; cannot reliably separate CENTER and CAMERA2'
+        };
       }
-      return { autoLabel: 'camera2', confidence: 'medium', reason: 'Longer tap-like gesture cluster looks like CAMERA2' };
+
+      if (clusterLabel === 'center') {
+        return {
+          autoLabel: 'center',
+          confidence,
+          reason: comparison.strongestFeatures[0] ?? 'This tap falls into the CENTER timing/event cluster'
+        };
+      }
+
+      return {
+        autoLabel: 'camera2',
+        confidence,
+        reason: comparison.strongestFeatures[0] ?? 'This tap falls into the CAMERA2 timing/event cluster'
+      };
     }
   }
 
@@ -473,6 +693,7 @@ const laymanSummary = computed(() => {
   } else {
     lines.push('Tap-like buttons have not been separated into CENTER and CAMERA2 yet.');
   }
+  lines.push(`Center vs Camera2 verdict: ${centerCamera2DetailedComparison.value.verdict}.`);
 
   if (camera1Diagnostic.value.verdict === 'likely media key') {
     lines.push(`CAMERA1 likely behaves like a media or volume key${camera1Diagnostic.value.detectedKey ? ` (${camera1Diagnostic.value.detectedKey})` : ''}.`);
@@ -499,6 +720,42 @@ const detailedLogExportText = computed(() =>
       highLevelSummary: laymanSummary.value,
       buttonDiscovery: discoveredButtons.value,
       camera1Diagnostic: camera1Diagnostic.value,
+      centerCamera2Comparison: {
+        verdict: centerCamera2DetailedComparison.value.verdict,
+        confidence: centerCamera2DetailedComparison.value.confidence,
+        strongestFeatures: centerCamera2DetailedComparison.value.strongestFeatures,
+        durationOverlap: centerCamera2DetailedComparison.value.durationOverlap,
+        clickDelayOverlap: centerCamera2DetailedComparison.value.clickDelayOverlap,
+        keyboardOverlap: centerCamera2DetailedComparison.value.keyboardOverlap,
+        hidOverlap: centerCamera2DetailedComparison.value.hidOverlap,
+        mouseSequenceOverlap: centerCamera2DetailedComparison.value.mouseSequenceOverlap,
+        center: {
+          sampleCount: centerCamera2DetailedComparison.value.centerCluster.count,
+          durationMin: centerCamera2DetailedComparison.value.centerCluster.durations.length ? Math.min(...centerCamera2DetailedComparison.value.centerCluster.durations) : null,
+          durationMax: centerCamera2DetailedComparison.value.centerCluster.durations.length ? Math.max(...centerCamera2DetailedComparison.value.centerCluster.durations) : null,
+          durationAvg: centerCamera2DetailedComparison.value.centerCluster.durations.length ? average(centerCamera2DetailedComparison.value.centerCluster.durations) : null,
+          clickDelayMin: centerCamera2DetailedComparison.value.centerCluster.clickDelays.length ? Math.min(...centerCamera2DetailedComparison.value.centerCluster.clickDelays) : null,
+          clickDelayMax: centerCamera2DetailedComparison.value.centerCluster.clickDelays.length ? Math.max(...centerCamera2DetailedComparison.value.centerCluster.clickDelays) : null,
+          clickDelayAvg: centerCamera2DetailedComparison.value.centerCluster.clickDelays.length ? average(centerCamera2DetailedComparison.value.centerCluster.clickDelays) : null,
+          keyboardKeys: centerCamera2DetailedComparison.value.centerCluster.keyboardKeys,
+          hidFingerprints: centerCamera2DetailedComparison.value.centerCluster.hidFingerprints,
+          mouseSequences: centerCamera2DetailedComparison.value.centerCluster.mouseSequences,
+          focusChangeCount: centerCamera2DetailedComparison.value.centerCluster.focusChangeCount
+        },
+        camera2: {
+          sampleCount: centerCamera2DetailedComparison.value.camera2Cluster.count,
+          durationMin: centerCamera2DetailedComparison.value.camera2Cluster.durations.length ? Math.min(...centerCamera2DetailedComparison.value.camera2Cluster.durations) : null,
+          durationMax: centerCamera2DetailedComparison.value.camera2Cluster.durations.length ? Math.max(...centerCamera2DetailedComparison.value.camera2Cluster.durations) : null,
+          durationAvg: centerCamera2DetailedComparison.value.camera2Cluster.durations.length ? average(centerCamera2DetailedComparison.value.camera2Cluster.durations) : null,
+          clickDelayMin: centerCamera2DetailedComparison.value.camera2Cluster.clickDelays.length ? Math.min(...centerCamera2DetailedComparison.value.camera2Cluster.clickDelays) : null,
+          clickDelayMax: centerCamera2DetailedComparison.value.camera2Cluster.clickDelays.length ? Math.max(...centerCamera2DetailedComparison.value.camera2Cluster.clickDelays) : null,
+          clickDelayAvg: centerCamera2DetailedComparison.value.camera2Cluster.clickDelays.length ? average(centerCamera2DetailedComparison.value.camera2Cluster.clickDelays) : null,
+          keyboardKeys: centerCamera2DetailedComparison.value.camera2Cluster.keyboardKeys,
+          hidFingerprints: centerCamera2DetailedComparison.value.camera2Cluster.hidFingerprints,
+          mouseSequences: centerCamera2DetailedComparison.value.camera2Cluster.mouseSequences,
+          focusChangeCount: centerCamera2DetailedComparison.value.camera2Cluster.focusChangeCount
+        }
+      },
       centerVsCamera2: centerVsCamera2Summary.value,
       mappings: mappedButtons.value,
       analyzedSamples: analyzedSamples.value,
@@ -515,6 +772,7 @@ const exportSummaryText = computed(() =>
     {
       laymanSummary: laymanSummary.value,
       discoveredButtons: discoveredButtons.value,
+      centerCamera2Comparison: centerCamera2DetailedComparison.value,
       centerVsCamera2: centerVsCamera2Summary.value,
       camera1: camera1Summary.value,
       latestSampleDiagnostic: camera1Diagnostic.value
@@ -571,6 +829,15 @@ const average = (values: number[]): number => {
   }
 
   return roundNumber(values.reduce((sum, value) => sum + value, 0) / values.length);
+};
+
+const uniqueStrings = (values: string[]): string[] => Array.from(new Set(values.filter((value) => value.length > 0)));
+
+const sequenceFingerprint = (values: string[]): string => values.join(' > ');
+
+const countUniqueOverlap = (left: string[], right: string[]): number => {
+  const rightSet = new Set(right);
+  return uniqueStrings(left).filter((value) => rightSet.has(value)).length;
 };
 
 const getTargetSummary = (target: EventTarget | null) => {
@@ -1162,6 +1429,51 @@ const handleClickEvent = (event: MouseEvent): void => {
   attachClickTimingToRecentTapSample(clickTime);
 };
 
+const handleMouseEvent = (event: MouseEvent): void => {
+  if (!isRemoteListening.value) {
+    return;
+  }
+
+  if (isIgnoredUiEventTarget(event.target)) {
+    return;
+  }
+
+  const target = getTargetSummary(event.target);
+  registerDetectedInput('input', {
+    eventType: event.type,
+    tagName: target.tagName,
+    id: target.id,
+    className: target.className,
+    button: typeof event.button === 'number' ? event.button : null,
+    buttons: typeof event.buttons === 'number' ? event.buttons : null,
+    clientX: roundNumber(event.clientX),
+    clientY: roundNumber(event.clientY),
+    detail: event.detail,
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus()
+  }, performance.now());
+};
+
+const handleInputLifecycleEvent = (event: Event): void => {
+  if (!isRemoteListening.value) {
+    return;
+  }
+
+  if (isIgnoredUiEventTarget(event.target)) {
+    return;
+  }
+
+  const target = getTargetSummary(event.target);
+  registerDetectedInput('input', {
+    eventType: event.type,
+    tagName: target.tagName,
+    id: target.id,
+    className: target.className,
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus()
+  }, performance.now());
+};
+
 const handleVisibilityOrFocusEvent = (event: Event): void => {
   if (!isRemoteListening.value) {
     return;
@@ -1242,6 +1554,11 @@ const startRemoteListening = (): void => {
 
   window.addEventListener('click', handleClickEvent, { capture: true, passive: true });
   window.addEventListener('auxclick', handleClickEvent, { capture: true, passive: true });
+  window.addEventListener('mousedown', handleMouseEvent, { capture: true, passive: true });
+  window.addEventListener('mouseup', handleMouseEvent, { capture: true, passive: true });
+  window.addEventListener('contextmenu', handleMouseEvent, { capture: true, passive: true });
+  window.addEventListener('beforeinput', handleInputLifecycleEvent, { capture: true, passive: true });
+  window.addEventListener('input', handleInputLifecycleEvent, { capture: true, passive: true });
 
   window.addEventListener('focus', handleVisibilityOrFocusEvent, { capture: true, passive: true });
   window.addEventListener('blur', handleVisibilityOrFocusEvent, { capture: true, passive: true });
@@ -1499,6 +1816,11 @@ onBeforeUnmount(() => {
 
     window.removeEventListener('click', handleClickEvent, { capture: true });
     window.removeEventListener('auxclick', handleClickEvent, { capture: true });
+    window.removeEventListener('mousedown', handleMouseEvent, { capture: true });
+    window.removeEventListener('mouseup', handleMouseEvent, { capture: true });
+    window.removeEventListener('contextmenu', handleMouseEvent, { capture: true });
+    window.removeEventListener('beforeinput', handleInputLifecycleEvent, { capture: true });
+    window.removeEventListener('input', handleInputLifecycleEvent, { capture: true });
 
     window.removeEventListener('focus', handleVisibilityOrFocusEvent, { capture: true });
     window.removeEventListener('blur', handleVisibilityOrFocusEvent, { capture: true });
