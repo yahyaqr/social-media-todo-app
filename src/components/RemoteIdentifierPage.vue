@@ -79,11 +79,39 @@ type ActivePointerSession = {
   points: PointerCapturePoint[];
 };
 
+type SampleLabel = 'left' | 'right' | 'up' | 'down' | 'center' | 'camera1' | 'camera2' | 'unknown';
+
+type NearbyBufferedEvent = {
+  observedAt: number;
+  type: RemoteLogType;
+  payload: Record<string, unknown>;
+};
+
+type CapturedSample = {
+  id: number;
+  observedAt: number;
+  sourceType: 'keyboard' | 'hid' | 'gamepad' | 'gesture';
+  signature: string;
+  payload: Record<string, unknown>;
+  nearbyEvents: NearbyBufferedEvent[];
+  sourceChannel: 'pointer' | 'keyboard' | 'hid' | 'gamepad' | 'mixed' | 'unknown';
+  classificationHint: 'tap' | 'drag' | 'media-key-like' | 'unknown';
+  hasKeyboardEventNearby: boolean;
+  hasHidEventNearby: boolean;
+  hasGamepadEventNearby: boolean;
+  hasFocusChangeNearby: boolean;
+  label: SampleLabel | null;
+  mappingName: string | null;
+};
+
 const REMOTE_LOG_LIMIT = 60;
 const POINTER_MOVE_LOG_SAMPLE_LIMIT = 40;
-const MIN_DIRECTION_DISTANCE = 12;
 const MAX_STILLNESS_DISTANCE = 6;
 const POINTER_SESSION_TIMEOUT_MS = 1600;
+const NEARBY_EVENT_BUFFER_WINDOW_MS = 500;
+const SAMPLE_NEARBY_LOOKBACK_MS = 150;
+const SAMPLE_NEARBY_LOOKAHEAD_MS = 150;
+const sampleLabelOptions: SampleLabel[] = ['left', 'right', 'up', 'down', 'center', 'camera1', 'camera2', 'unknown'];
 
 const supportedRemoteKeys = new Set([
   'Camera',
@@ -124,6 +152,12 @@ const currentDetectedPayload = ref<Record<string, unknown> | null>(null);
 const pendingAssignedName = ref('');
 const mappedButtons = ref<RemoteButtonMapping[]>([]);
 const activePointerSessionSummary = ref<string | null>(null);
+const capturedSamples = ref<CapturedSample[]>([]);
+const sampleIdSeed = ref(0);
+const nearbyEventBuffer = ref<NearbyBufferedEvent[]>([]);
+const isCopyingSamples = ref(false);
+const isCopyingLabeledDataset = ref(false);
+const isCopyingSummary = ref(false);
 
 const hidSupportAvailable = computed(() => typeof navigator !== 'undefined' && 'hid' in navigator);
 const gamepadSupportAvailable = computed(() => typeof navigator !== 'undefined' && 'getGamepads' in navigator);
@@ -159,6 +193,136 @@ const mappingsExportText = computed(() =>
   )
 );
 
+const latestCapturedSample = computed(() => capturedSamples.value[0] ?? null);
+
+const rawSamplesExportText = computed(() => JSON.stringify(capturedSamples.value, null, 2));
+
+const labeledDatasetExportText = computed(() =>
+  JSON.stringify(capturedSamples.value.filter((sample) => sample.label), null, 2)
+);
+
+const buildTimingSummary = (label: SampleLabel) => {
+  const samples = capturedSamples.value.filter((sample) => sample.label === label && sample.sourceType === 'gesture');
+  const durations = samples
+    .map((sample) => sample.payload.durationMs)
+    .filter((value): value is number => typeof value === 'number');
+  const clickDelays = samples
+    .map((sample) => sample.payload.clickDelayMs)
+    .filter((value): value is number => typeof value === 'number');
+
+  return {
+    label,
+    count: samples.length,
+    minDuration: durations.length ? Math.min(...durations) : null,
+    maxDuration: durations.length ? Math.max(...durations) : null,
+    avgDuration: durations.length ? average(durations) : null,
+    minClickDelay: clickDelays.length ? Math.min(...clickDelays) : null,
+    maxClickDelay: clickDelays.length ? Math.max(...clickDelays) : null,
+    avgClickDelay: clickDelays.length ? average(clickDelays) : null
+  };
+};
+
+const centerTimingSummary = computed(() => buildTimingSummary('center'));
+const camera2TimingSummary = computed(() => buildTimingSummary('camera2'));
+
+const centerVsCamera2Summary = computed(() => {
+  const center = centerTimingSummary.value;
+  const camera2 = camera2TimingSummary.value;
+  const stableTimingDifference =
+    center.count > 0 &&
+    camera2.count > 0 &&
+    center.maxDuration !== null &&
+    camera2.minDuration !== null &&
+    (center.maxDuration < camera2.minDuration || camera2.maxDuration !== null && camera2.maxDuration < (center.minDuration ?? 0));
+
+  return {
+    center,
+    camera2,
+    stableTimingDifference
+  };
+});
+
+const camera1Summary = computed(() => {
+  const camera1Samples = capturedSamples.value.filter((sample) => sample.label === 'camera1');
+  const keyboardOnlySamples = camera1Samples.filter((sample) =>
+    sample.sourceChannel === 'keyboard' || (sample.hasKeyboardEventNearby && sample.sourceChannel !== 'pointer')
+  );
+  const detectedKeys = Array.from(new Set(
+    camera1Samples
+      .flatMap((sample) => [
+        sample.sourceType === 'keyboard' ? sample.payload.key : null,
+        ...sample.nearbyEvents.filter((entry) => entry.type === 'keyboard').map((entry) => entry.payload.key)
+      ])
+      .filter((key): key is string => typeof key === 'string' && key.length > 0)
+  ));
+  const volumeKeys = detectedKeys.filter((key) => isVolumeLikeKey(key));
+  const pointerMissingCount = camera1Samples.filter((sample) => sample.sourceChannel !== 'pointer' && sample.payload.gestureType !== 'tap-like' && sample.payload.gestureType !== 'drag-like').length;
+
+  return {
+    count: camera1Samples.length,
+    keyboardOnlyCount: keyboardOnlySamples.length,
+    detectedKeys,
+    volumeKeys,
+    pointerMissingCount
+  };
+});
+
+const camera1Diagnostic = computed(() => {
+  const sample = latestCapturedSample.value;
+
+  if (!sample) {
+    return {
+      keyboardDetected: false,
+      detectedKey: null,
+      isVolumeRelated: false,
+      noPointerGesture: false,
+      hidDetected: false,
+      verdict: 'insufficient evidence'
+    };
+  }
+
+  const nearbyKeyboard = sample.sourceType === 'keyboard'
+    ? sample.payload
+    : sample.nearbyEvents.find((entry) => entry.type === 'keyboard')?.payload ?? null;
+  const detectedKey = typeof nearbyKeyboard?.key === 'string' ? nearbyKeyboard.key : null;
+  const keyboardDetected = Boolean(detectedKey);
+  const hidDetected = sample.sourceType === 'hid' || sample.hasHidEventNearby;
+  const noPointerGesture = sample.sourceType !== 'gesture' && sample.sourceChannel !== 'pointer';
+  const isVolumeRelated = isVolumeLikeKey(detectedKey);
+
+  let verdict = 'insufficient evidence';
+  if (keyboardDetected && noPointerGesture) {
+    verdict = isVolumeRelated ? 'likely media key' : 'likely keyboard-like button';
+  } else if (hidDetected && !keyboardDetected && noPointerGesture) {
+    verdict = 'likely HID consumer control';
+  } else if (!keyboardDetected && !hidDetected && noPointerGesture && sample.hasFocusChangeNearby) {
+    verdict = 'likely OS-consumed volume button';
+  } else if (sample.sourceChannel === 'pointer' || sample.sourceType === 'gesture') {
+    verdict = 'likely pointer button';
+  }
+
+  return {
+    keyboardDetected,
+    detectedKey,
+    isVolumeRelated,
+    noPointerGesture,
+    hidDetected,
+    verdict
+  };
+});
+
+const exportSummaryText = computed(() =>
+  JSON.stringify(
+    {
+      centerVsCamera2: centerVsCamera2Summary.value,
+      camera1: camera1Summary.value,
+      latestSampleDiagnostic: camera1Diagnostic.value
+    },
+    null,
+    2
+  )
+);
+
 const formatTimestamp = (): string =>
   new Date().toLocaleTimeString([], {
     hour: '2-digit',
@@ -166,9 +330,46 @@ const formatTimestamp = (): string =>
     second: '2-digit'
   });
 
+const isVolumeLikeKey = (key: unknown): boolean => {
+  return typeof key === 'string' && [
+    'AudioVolumeUp',
+    'AudioVolumeDown',
+    'AudioVolumeMute',
+    'VolumeUp',
+    'VolumeDown',
+    'VolumeMute'
+  ].includes(key);
+};
+
+const isMediaLikeKey = (key: unknown): boolean => {
+  return typeof key === 'string' && [
+    'AudioVolumeUp',
+    'AudioVolumeDown',
+    'AudioVolumeMute',
+    'VolumeUp',
+    'VolumeDown',
+    'VolumeMute',
+    'MediaPlayPause',
+    'MediaTrackNext',
+    'MediaTrackPrevious',
+    'HeadsetHook',
+    'Camera',
+    'CameraFocus',
+    'Unidentified'
+  ].includes(key);
+};
+
 const roundNumber = (value: number, decimals = 2): number => {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
+};
+
+const average = (values: number[]): number => {
+  if (!values.length) {
+    return 0;
+  }
+
+  return roundNumber(values.reduce((sum, value) => sum + value, 0) / values.length);
 };
 
 const getTargetSummary = (target: EventTarget | null) => {
@@ -195,6 +396,123 @@ const writeRemoteLog = (type: RemoteLogType, payload: Record<string, unknown>): 
   remoteLog.value = isSingleCaptureMode.value
     ? [nextEntry]
     : [nextEntry, ...remoteLog.value].slice(0, REMOTE_LOG_LIMIT);
+};
+
+const pushNearbyBufferedEvent = (type: RemoteLogType, payload: Record<string, unknown>, observedAt = performance.now()): void => {
+  const minAllowedTime = observedAt - NEARBY_EVENT_BUFFER_WINDOW_MS;
+
+  nearbyEventBuffer.value = [
+    ...nearbyEventBuffer.value.filter((entry) => entry.observedAt >= minAllowedTime),
+    {
+      observedAt,
+      type,
+      payload
+    }
+  ];
+};
+
+const getNearbyEventsForTime = (observedAt: number): NearbyBufferedEvent[] => {
+  const start = observedAt - SAMPLE_NEARBY_LOOKBACK_MS;
+  const end = observedAt + SAMPLE_NEARBY_LOOKAHEAD_MS;
+
+  return nearbyEventBuffer.value
+    .filter((entry) => entry.observedAt >= start && entry.observedAt <= end)
+    .map((entry) => ({
+      observedAt: roundNumber(entry.observedAt),
+      type: entry.type,
+      payload: entry.payload
+    }));
+};
+
+const inferSourceChannel = (sample: Pick<CapturedSample, 'sourceType' | 'nearbyEvents'>): CapturedSample['sourceChannel'] => {
+  const hasPointer = sample.sourceType === 'gesture' || sample.nearbyEvents.some((entry) => entry.type === 'pointer' || entry.type === 'gesture');
+  const hasKeyboard = sample.sourceType === 'keyboard' || sample.nearbyEvents.some((entry) => entry.type === 'keyboard');
+  const hasHid = sample.sourceType === 'hid' || sample.nearbyEvents.some((entry) => entry.type === 'hid');
+  const hasGamepad = sample.sourceType === 'gamepad' || sample.nearbyEvents.some((entry) => entry.type === 'gamepad');
+  const activeCount = [hasPointer, hasKeyboard, hasHid, hasGamepad].filter(Boolean).length;
+
+  if (activeCount > 1) return 'mixed';
+  if (hasPointer) return 'pointer';
+  if (hasKeyboard) return 'keyboard';
+  if (hasHid) return 'hid';
+  if (hasGamepad) return 'gamepad';
+  return 'unknown';
+};
+
+const inferClassificationHint = (sourceType: CapturedSample['sourceType'], payload: Record<string, unknown>, nearbyEvents: NearbyBufferedEvent[]): CapturedSample['classificationHint'] => {
+  if (sourceType === 'gesture') {
+    return payload.gestureType === 'drag-like' ? 'drag' : payload.gestureType === 'tap-like' ? 'tap' : 'unknown';
+  }
+
+  if (sourceType === 'keyboard') {
+    return isMediaLikeKey(payload.key) ? 'media-key-like' : 'unknown';
+  }
+
+  const nearbyKeyboard = nearbyEvents.find((entry) => entry.type === 'keyboard');
+  if (nearbyKeyboard && isMediaLikeKey(nearbyKeyboard.payload.key)) {
+    return 'media-key-like';
+  }
+
+  return 'unknown';
+};
+
+const findMappingNameForSignature = (signature: string): string | null => {
+  return mappedButtons.value.find((mapping) => mapping.signature === signature)?.assignedName ?? null;
+};
+
+const finalizeCapturedSample = (sampleId: number): void => {
+  capturedSamples.value = capturedSamples.value.map((sample) => {
+    if (sample.id !== sampleId) {
+      return sample;
+    }
+
+    const nearbyEvents = getNearbyEventsForTime(sample.observedAt);
+    const hasKeyboardEventNearby = nearbyEvents.some((entry) => entry.type === 'keyboard');
+    const hasHidEventNearby = nearbyEvents.some((entry) => entry.type === 'hid');
+    const hasGamepadEventNearby = nearbyEvents.some((entry) => entry.type === 'gamepad');
+    const hasFocusChangeNearby = nearbyEvents.some((entry) => entry.type === 'status' && typeof entry.payload.eventType === 'string');
+
+    return {
+      ...sample,
+      nearbyEvents,
+      sourceChannel: inferSourceChannel({ sourceType: sample.sourceType, nearbyEvents }),
+      classificationHint: inferClassificationHint(sample.sourceType, sample.payload, nearbyEvents),
+      hasKeyboardEventNearby,
+      hasHidEventNearby,
+      hasGamepadEventNearby,
+      hasFocusChangeNearby,
+      mappingName: findMappingNameForSignature(sample.signature)
+    };
+  });
+};
+
+const captureSample = (sourceType: CapturedSample['sourceType'], payload: Record<string, unknown>, observedAt = performance.now()): void => {
+  const signature = makeEventSignature(sourceType, payload);
+  const nextId = ++sampleIdSeed.value;
+
+  capturedSamples.value = [
+    {
+      id: nextId,
+      observedAt: roundNumber(observedAt),
+      sourceType,
+      signature,
+      payload,
+      nearbyEvents: [],
+      sourceChannel: 'unknown' as CapturedSample['sourceChannel'],
+      classificationHint: 'unknown' as CapturedSample['classificationHint'],
+      hasKeyboardEventNearby: false,
+      hasHidEventNearby: false,
+      hasGamepadEventNearby: false,
+      hasFocusChangeNearby: false,
+      label: null,
+      mappingName: findMappingNameForSignature(signature)
+    },
+    ...capturedSamples.value
+  ].slice(0, REMOTE_LOG_LIMIT);
+
+  window.setTimeout(() => {
+    finalizeCapturedSample(nextId);
+  }, SAMPLE_NEARBY_LOOKAHEAD_MS + 10);
 };
 
 const makeEventSignature = (type: string, payload: Record<string, unknown>): string => {
@@ -272,10 +590,16 @@ const rememberDetectedInput = (type: string, payload: Record<string, unknown>): 
 
 const registerDetectedInput = (
   type: 'keyboard' | 'pointer' | 'input' | 'gamepad' | 'hid' | 'gesture',
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  observedAt = performance.now()
 ): void => {
+  pushNearbyBufferedEvent(type, payload, observedAt);
   rememberDetectedInput(type, payload);
   writeRemoteLog(type, payload);
+
+  if (type === 'keyboard' || type === 'hid' || type === 'gamepad' || type === 'gesture') {
+    captureSample(type, payload, observedAt);
+  }
 };
 
 const toDistanceBucket = (distance: number): string => {
@@ -428,6 +752,7 @@ const finalizePointerSession = (endReason: 'pointerup' | 'click' | 'timeout'): v
         : 'drag-like';
 
   const payload = {
+    sessionId: session.id,
     gestureType,
     endReason,
     pointerType: session.pointerType,
@@ -444,6 +769,10 @@ const finalizePointerSession = (endReason: 'pointerup' | 'click' | 'timeout'): v
     dy,
     distance,
     durationMs,
+    pointerDownAt: roundNumber(session.startedAt),
+    pointerUpAt: roundNumber(endedAt),
+    clickAt: null,
+    clickDelayMs: null,
     moveCount,
     axis: directionMeta.axis,
     direction: directionMeta.direction,
@@ -465,7 +794,7 @@ const finalizePointerSession = (endReason: 'pointerup' | 'click' | 'timeout'): v
     `${payload.gestureType} | ${payload.direction} | ${distance}px | ${durationMs}ms`;
 
   remoteDetectedCount.value += 1;
-  registerDetectedInput('gesture', payload);
+  registerDetectedInput('gesture', payload, endedAt);
 };
 
 const handleKeyboardEvent = (event: KeyboardEvent): void => {
@@ -477,6 +806,7 @@ const handleKeyboardEvent = (event: KeyboardEvent): void => {
     return;
   }
 
+  const target = getTargetSummary(event.target);
   const payload = {
     eventType: event.type,
     key: event.key,
@@ -488,6 +818,9 @@ const handleKeyboardEvent = (event: KeyboardEvent): void => {
     metaKey: event.metaKey,
     shiftKey: event.shiftKey,
     repeat: event.repeat,
+    targetTagName: target.tagName,
+    targetId: target.id,
+    targetClassName: target.className,
     visibilityState: document.visibilityState,
     hasFocus: document.hasFocus()
   };
@@ -571,6 +904,36 @@ const handlePointerUp = (event: PointerEvent): void => {
   finalizePointerSession('pointerup');
 };
 
+const attachClickTimingToRecentTapSample = (clickTime: number): void => {
+  const recentTapSample = capturedSamples.value.find((sample) => {
+    if (sample.sourceType !== 'gesture' || sample.payload.gestureType !== 'tap-like') {
+      return false;
+    }
+
+    if (typeof sample.payload.pointerUpAt !== 'number' || sample.payload.clickAt !== null) {
+      return false;
+    }
+
+    return clickTime >= sample.payload.pointerUpAt && clickTime - sample.payload.pointerUpAt <= 250;
+  });
+
+  if (!recentTapSample) {
+    return;
+  }
+
+  const clickDelayMs = roundNumber(clickTime - (recentTapSample.payload.pointerUpAt as number));
+
+  recentTapSample.payload = {
+    ...recentTapSample.payload,
+    clickAt: roundNumber(clickTime),
+    clickDelayMs
+  };
+
+  recentTapSample.signature = makeEventSignature('gesture', recentTapSample.payload);
+  recentTapSample.mappingName = findMappingNameForSignature(recentTapSample.signature);
+  finalizeCapturedSample(recentTapSample.id);
+};
+
 const handleClickEvent = (event: MouseEvent): void => {
   if (!isRemoteListening.value || !isRawClickCaptureEnabled.value) {
     return;
@@ -581,6 +944,7 @@ const handleClickEvent = (event: MouseEvent): void => {
   }
 
   const target = getTargetSummary(event.target);
+  const clickTime = performance.now();
 
   registerDetectedInput('input', {
     eventType: event.type,
@@ -594,7 +958,9 @@ const handleClickEvent = (event: MouseEvent): void => {
     detail: event.detail,
     visibilityState: document.visibilityState,
     hasFocus: document.hasFocus()
-  });
+  }, clickTime);
+
+  attachClickTimingToRecentTapSample(clickTime);
 };
 
 const handleVisibilityOrFocusEvent = (event: Event): void => {
@@ -602,11 +968,14 @@ const handleVisibilityOrFocusEvent = (event: Event): void => {
     return;
   }
 
-  writeRemoteLog('status', {
+  const payload = {
     eventType: event.type,
     visibilityState: document.visibilityState,
     hasFocus: document.hasFocus()
-  });
+  };
+
+  pushNearbyBufferedEvent('status', payload, performance.now());
+  writeRemoteLog('status', payload);
 };
 
 const pollGamepads = (): void => {
@@ -752,6 +1121,14 @@ const saveCurrentMapping = (): void => {
 
   if (existingIndex >= 0) {
     mappedButtons.value = mappedButtons.value.map((mapping, index) => (index === existingIndex ? nextMapping : mapping));
+    capturedSamples.value = capturedSamples.value.map((sample) =>
+      sample.signature === nextMapping.signature
+        ? {
+            ...sample,
+            mappingName: nextMapping.assignedName
+          }
+        : sample
+    );
     writeRemoteLog('status', {
       status: 'mapping-updated',
       assignedName,
@@ -761,6 +1138,14 @@ const saveCurrentMapping = (): void => {
   }
 
   mappedButtons.value = [nextMapping, ...mappedButtons.value];
+  capturedSamples.value = capturedSamples.value.map((sample) =>
+    sample.signature === nextMapping.signature
+      ? {
+          ...sample,
+          mappingName: nextMapping.assignedName
+        }
+      : sample
+  );
   writeRemoteLog('status', {
     status: 'mapping-saved',
     assignedName,
@@ -770,6 +1155,14 @@ const saveCurrentMapping = (): void => {
 
 const removeMapping = (signature: string): void => {
   mappedButtons.value = mappedButtons.value.filter((mapping) => mapping.signature !== signature);
+  capturedSamples.value = capturedSamples.value.map((sample) =>
+    sample.signature === signature
+      ? {
+          ...sample,
+          mappingName: null
+        }
+      : sample
+  );
 
   if (currentDetectedSignature.value === signature) {
     pendingAssignedName.value = '';
@@ -788,6 +1181,50 @@ const copyMappings = async (): Promise<void> => {
     writeRemoteLog('error', { error: `Copy mappings failed: ${String(error)}` });
   } finally {
     isCopyingMappings.value = false;
+  }
+};
+
+const assignLabelToSample = (sampleId: number, label: SampleLabel): void => {
+  capturedSamples.value = capturedSamples.value.map((sample) => sample.id === sampleId ? { ...sample, label } : sample);
+  writeRemoteLog('status', { status: 'sample-labeled', sampleId, label });
+};
+
+const copySamples = async (): Promise<void> => {
+  isCopyingSamples.value = true;
+
+  try {
+    await navigator.clipboard.writeText(rawSamplesExportText.value);
+    writeRemoteLog('status', { status: 'copied-samples' });
+  } catch (error) {
+    writeRemoteLog('error', { error: `Copy samples failed: ${String(error)}` });
+  } finally {
+    isCopyingSamples.value = false;
+  }
+};
+
+const copyLabeledDataset = async (): Promise<void> => {
+  isCopyingLabeledDataset.value = true;
+
+  try {
+    await navigator.clipboard.writeText(labeledDatasetExportText.value);
+    writeRemoteLog('status', { status: 'copied-labeled-dataset' });
+  } catch (error) {
+    writeRemoteLog('error', { error: `Copy labeled dataset failed: ${String(error)}` });
+  } finally {
+    isCopyingLabeledDataset.value = false;
+  }
+};
+
+const copySummary = async (): Promise<void> => {
+  isCopyingSummary.value = true;
+
+  try {
+    await navigator.clipboard.writeText(exportSummaryText.value);
+    writeRemoteLog('status', { status: 'copied-summary' });
+  } catch (error) {
+    writeRemoteLog('error', { error: `Copy summary failed: ${String(error)}` });
+  } finally {
+    isCopyingSummary.value = false;
   }
 };
 
@@ -1084,6 +1521,122 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-slate-900">
+                Latest captured sample
+              </p>
+              <p class="mt-1 text-xs leading-5 text-slate-500">
+                {{ latestCapturedSample ? `Channel: ${latestCapturedSample.sourceChannel} | Hint: ${latestCapturedSample.classificationHint}` : 'No sample captured yet.' }}
+              </p>
+            </div>
+            <span
+              v-if="latestCapturedSample?.mappingName"
+              class="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700"
+            >
+              {{ latestCapturedSample.mappingName }}
+            </span>
+          </div>
+
+          <div v-if="latestCapturedSample" class="mt-3 space-y-2 text-xs leading-5 text-slate-600">
+            <p>
+              Flags:
+              <span class="font-medium text-slate-900">
+                keyboard={{ latestCapturedSample.hasKeyboardEventNearby }},
+                hid={{ latestCapturedSample.hasHidEventNearby }},
+                gamepad={{ latestCapturedSample.hasGamepadEventNearby }},
+                focus={{ latestCapturedSample.hasFocusChangeNearby }}
+              </span>
+            </p>
+            <p
+              v-if="latestCapturedSample.sourceType === 'gesture'"
+              class="break-all rounded-xl bg-white px-3 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200"
+            >
+              duration={{ latestCapturedSample.payload.durationMs ?? 'n/a' }}ms,
+              pointerDown={{ latestCapturedSample.payload.pointerDownAt ?? 'n/a' }},
+              pointerUp={{ latestCapturedSample.payload.pointerUpAt ?? 'n/a' }},
+              click={{ latestCapturedSample.payload.clickAt ?? 'n/a' }},
+              clickDelay={{ latestCapturedSample.payload.clickDelayMs ?? 'n/a' }}ms
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="label in sampleLabelOptions"
+                :key="label"
+                type="button"
+                data-remote-ui-control="true"
+                class="inline-flex min-h-9 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold transition active:scale-[0.99]"
+                :class="latestCapturedSample.label === label ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
+                @click="assignLabelToSample(latestCapturedSample.id, label)"
+              >
+                {{ label }}
+              </button>
+            </div>
+            <details class="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-200">
+              <summary class="cursor-pointer text-xs font-semibold text-slate-700">
+                Nearby events ({{ latestCapturedSample.nearbyEvents.length }})
+              </summary>
+              <pre class="mt-2 overflow-auto text-[11px] leading-5 text-slate-700">{{ JSON.stringify(latestCapturedSample.nearbyEvents, null, 2) }}</pre>
+            </details>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-dashed border-slate-300 px-3 py-3">
+          <p class="text-sm font-semibold text-slate-900">
+            Center vs Camera2
+          </p>
+          <div class="mt-2 space-y-2 text-xs leading-5 text-slate-600">
+            <p>
+              Center:
+              <span class="font-medium text-slate-900">
+                count={{ centerVsCamera2Summary.center.count }},
+                min={{ centerVsCamera2Summary.center.minDuration ?? 'n/a' }}ms,
+                max={{ centerVsCamera2Summary.center.maxDuration ?? 'n/a' }}ms,
+                avg={{ centerVsCamera2Summary.center.avgDuration ?? 'n/a' }}ms,
+                clickDelayAvg={{ centerVsCamera2Summary.center.avgClickDelay ?? 'n/a' }}ms
+              </span>
+            </p>
+            <p>
+              Camera2:
+              <span class="font-medium text-slate-900">
+                count={{ centerVsCamera2Summary.camera2.count }},
+                min={{ centerVsCamera2Summary.camera2.minDuration ?? 'n/a' }}ms,
+                max={{ centerVsCamera2Summary.camera2.maxDuration ?? 'n/a' }}ms,
+                avg={{ centerVsCamera2Summary.camera2.avgDuration ?? 'n/a' }}ms,
+                clickDelayAvg={{ centerVsCamera2Summary.camera2.avgClickDelay ?? 'n/a' }}ms
+              </span>
+            </p>
+            <p class="font-medium text-slate-900">
+              Stable timing difference:
+              {{ centerVsCamera2Summary.stableTimingDifference ? 'yes' : 'not yet' }}
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-dashed border-slate-300 px-3 py-3">
+          <p class="text-sm font-semibold text-slate-900">
+            Camera1 diagnostic
+          </p>
+          <div class="mt-2 space-y-2 text-xs leading-5 text-slate-600">
+            <p>Was a keyboard event detected? <span class="font-medium text-slate-900">{{ camera1Diagnostic.keyboardDetected ? 'yes' : 'no' }}</span></p>
+            <p>Which key? <span class="font-medium text-slate-900">{{ camera1Diagnostic.detectedKey ?? 'none' }}</span></p>
+            <p>Was it volume-related? <span class="font-medium text-slate-900">{{ camera1Diagnostic.isVolumeRelated ? 'yes' : 'no' }}</span></p>
+            <p>Was there no pointer gesture? <span class="font-medium text-slate-900">{{ camera1Diagnostic.noPointerGesture ? 'yes' : 'no' }}</span></p>
+            <p>Was there any HID signal? <span class="font-medium text-slate-900">{{ camera1Diagnostic.hidDetected ? 'yes' : 'no' }}</span></p>
+            <p class="font-medium text-slate-900">Summary: {{ camera1Diagnostic.verdict }}</p>
+            <p>
+              Camera1 labeled samples:
+              <span class="font-medium text-slate-900">
+                count={{ camera1Summary.count }},
+                keyboardOnly={{ camera1Summary.keyboardOnlyCount }},
+                pointerMissing={{ camera1Summary.pointerMissingCount }},
+                keys={{ camera1Summary.detectedKeys.join(', ') || 'none' }},
+                volumeKeys={{ camera1Summary.volumeKeys.join(', ') || 'none' }}
+              </span>
+            </p>
+          </div>
+        </div>
+
         <div class="rounded-2xl border border-dashed border-slate-300 px-3 py-3">
           <div class="flex items-center justify-between gap-3">
             <div class="min-w-0">
@@ -1128,6 +1681,38 @@ onBeforeUnmount(() => {
           <span class="font-medium text-slate-900">
             keydown, keyup, pointerdown, pointermove, pointerup, click, auxclick, focus, blur, visibilitychange, gamepad polling, WebHID
           </span>
+        </div>
+
+        <div class="rounded-2xl bg-slate-50 px-3 py-3">
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              data-remote-ui-control="true"
+              class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isCopyingSamples || !capturedSamples.length"
+              @click="copySamples"
+            >
+              {{ isCopyingSamples ? 'Copying...' : 'Copy raw samples' }}
+            </button>
+            <button
+              type="button"
+              data-remote-ui-control="true"
+              class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isCopyingLabeledDataset || !capturedSamples.some((sample) => sample.label)"
+              @click="copyLabeledDataset"
+            >
+              {{ isCopyingLabeledDataset ? 'Copying...' : 'Copy labeled dataset' }}
+            </button>
+            <button
+              type="button"
+              data-remote-ui-control="true"
+              class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isCopyingSummary || !capturedSamples.length"
+              @click="copySummary"
+            >
+              {{ isCopyingSummary ? 'Copying...' : 'Copy summary' }}
+            </button>
+          </div>
         </div>
 
         <div>
@@ -1224,3 +1809,4 @@ onBeforeUnmount(() => {
     </section>
   </article>
 </template>
+
