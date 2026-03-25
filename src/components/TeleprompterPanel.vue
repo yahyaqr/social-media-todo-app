@@ -389,6 +389,19 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="flex items-center justify-between gap-2 border-b border-slate-400/20 bg-slate-900/80 px-3 py-2 max-sm:px-2.5">
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            class="inline-flex min-h-8 min-w-[1.9rem] items-center justify-center rounded-[0.625rem] border border-blue-400/40 bg-slate-800/95 px-2 py-1 text-slate-50 transition hover:bg-blue-600/75"
+            :aria-label="isAutoScrolling ? 'Pause auto-scroll' : 'Start auto-scroll'"
+            :title="isAutoScrolling ? 'Pause auto-scroll' : 'Start auto-scroll'"
+            @click="toggleAutoScroll"
+          >
+            <Pause v-if="isAutoScrolling" class="h-4 w-12" />
+            <Play v-else class="h-4 w-12" />
+          </button>
+        </div>
+
         <div class="flex min-w-0 items-center gap-1">
           <button
             type="button"
@@ -426,29 +439,6 @@ onBeforeUnmount(() => {
             @click="adjustScrollSpeed(1)"
           >
             +
-          </button>
-        </div>
-
-        <div class="flex items-center gap-1">
-          <button
-            type="button"
-            class="inline-flex min-h-8 min-w-[1.9rem] items-center justify-center rounded-[0.625rem] border border-blue-400/40 bg-slate-800/95 px-2 py-1 text-slate-50 transition hover:bg-blue-600/75"
-            :aria-label="isAutoScrolling ? 'Pause auto-scroll' : 'Start auto-scroll'"
-            :title="isAutoScrolling ? 'Pause auto-scroll' : 'Start auto-scroll'"
-            @click="toggleAutoScroll"
-          >
-            <Pause v-if="isAutoScrolling" class="h-4 w-4" />
-            <Play v-else class="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            class="inline-flex min-h-8 min-w-[1.9rem] items-center justify-center rounded-[0.625rem] border border-blue-400/40 bg-slate-800/95 px-2 py-1 text-slate-50 transition hover:bg-blue-600/75"
-            aria-label="Close teleprompter"
-            title="Close teleprompter"
-            @click="emit('close')"
-          >
-            <X class="h-4 w-4" />
           </button>
         </div>
       </div>
