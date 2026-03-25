@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -12,6 +13,7 @@ import {
   CodeXml,
   Eraser,
   Italic,
+  Lightbulb,
   Link2,
   List,
   ListOrdered,
@@ -34,6 +36,8 @@ const emit = defineEmits<{
 }>();
 
 const isTeleprompterOpen = ref(false);
+const router = useRouter();
+const route = useRoute();
 
 const normalizeCopiedText = (value: string): string =>
   value.replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -294,6 +298,15 @@ const setInlineLink = (): void => {
   emit('commit');
 };
 
+const goToContentIdeation = async (): Promise<void> => {
+  await router.push({
+    name: 'content-ideation',
+    query: {
+      returnTo: route.fullPath
+    }
+  });
+};
+
 </script>
 
 <template>
@@ -302,6 +315,15 @@ const setInlineLink = (): void => {
       <h3 class="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-700">Full Content</h3>
       <div class="flex flex-wrap items-center gap-1.5">
         <button type="button" class="editor-btn" @click="isTeleprompterOpen = true">Teleprompter</button>
+        <button
+          type="button"
+          class="editor-btn editor-btn-icon"
+          title="Content outlining"
+          aria-label="Open content outlining"
+          @click="goToContentIdeation"
+        >
+          <Lightbulb class="h-4 w-4" />
+        </button>
         <span class="editor-divider" aria-hidden="true" />
         <button
           type="button"
