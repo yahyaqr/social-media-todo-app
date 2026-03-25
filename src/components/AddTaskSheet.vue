@@ -133,7 +133,7 @@ const selectClientTag = (tag: string): void => {
   <Transition name="sheet-up">
     <section
       v-if="visible"
-      class="fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-white p-3 shadow-2xl ring-1 ring-slate-200 sm:mx-auto sm:mb-4 sm:max-w-xl sm:rounded-2xl sm:p-4"
+      class="fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-white p-3 shadow-2xl ring-1 ring-slate-200 sm:mx-auto sm:mb-4 sm:max-w-xl sm:rounded-2xl sm:p-4 pb-8"
       @click.stop
     >
       <div class="mb-3 flex items-center justify-between">
