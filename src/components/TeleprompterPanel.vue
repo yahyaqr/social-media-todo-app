@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { Pause, Play, X } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  useBluetoothRemoteTeleprompter,
+  type RemoteEventPayload
+} from '../composables/useBluetoothRemoteTeleprompter';
 
 const props = defineProps<{
   visible: boolean;
@@ -198,6 +202,67 @@ const adjustScrollSpeed = (direction: -1 | 1): void => {
   scrollSpeed.value = clamp(scrollSpeed.value + direction * SPEED_STEP, 8, 160);
 };
 
+const nudgeScroll = (direction: -1 | 1): void => {
+  if (!panelBody.value) {
+    return;
+  }
+
+  const maxScrollTop = Math.max(0, panelBody.value.scrollHeight - panelBody.value.clientHeight);
+  const nextScrollTop = clamp(panelBody.value.scrollTop + direction * 72, 0, maxScrollTop);
+
+  panelBody.value.scrollTop = nextScrollTop;
+  scrollTop.value = nextScrollTop;
+  scrollPosition.value = nextScrollTop;
+};
+
+const handleRemoteTeleprompterEvent = (payload: RemoteEventPayload): void => {
+  switch (payload.action) {
+    case 'confirm':
+      toggleAutoScroll();
+      break;
+    case 'up':
+      nudgeScroll(-1);
+      break;
+    case 'down':
+      nudgeScroll(1);
+      break;
+    case 'left':
+      adjustScrollSpeed(-1);
+      break;
+    case 'right':
+      adjustScrollSpeed(1);
+      break;
+    case 'camera1':
+      adjustFontSize(-1);
+      break;
+    case 'camera2':
+      adjustFontSize(1);
+      break;
+    case 'unknown':
+      break;
+  }
+};
+
+const remoteTeleprompter = useBluetoothRemoteTeleprompter({
+  autoStart: false,
+  onRemoteEvent: handleRemoteTeleprompterEvent
+});
+
+const remoteStatusText = computed(() => {
+  if (!remoteTeleprompter.isListening.value) {
+    return 'Remote off';
+  }
+
+  const lastEvent = remoteTeleprompter.lastRemoteEvent.value;
+  if (!lastEvent) {
+    return remoteTeleprompter.connectedHidName.value ? 'Remote on | HID connected' : 'Remote on | waiting';
+  }
+
+  const source = lastEvent.source;
+  const action = lastEvent.action;
+  return `Remote on | ${action} | ${source}`;
+});
+
 const onDragPointerDown = (event: PointerEvent): void => {
   if (event.button !== 0) {
     return;
@@ -321,6 +386,7 @@ watch(
       window.addEventListener('pointerup', handlePointerUp);
       window.addEventListener('pointercancel', handlePointerUp);
       window.addEventListener('resize', onWindowResize);
+      remoteTeleprompter.startListening();
       return;
     }
 
@@ -333,6 +399,7 @@ watch(
     window.removeEventListener('pointerup', handlePointerUp);
     window.removeEventListener('pointercancel', handlePointerUp);
     window.removeEventListener('resize', onWindowResize);
+    remoteTeleprompter.stopListening();
   }
 );
 
@@ -357,6 +424,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', handlePointerUp);
   window.removeEventListener('pointercancel', handlePointerUp);
   window.removeEventListener('resize', onWindowResize);
+  remoteTeleprompter.stopListening();
 });
 </script>
 
@@ -466,6 +534,18 @@ onBeforeUnmount(() => {
           >
             +
           </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-2 border-b border-slate-400/20 bg-slate-950/70 px-3 py-1.5 max-sm:px-2.5">
+        <div class="inline-flex min-h-7 items-center rounded-full border border-emerald-400/25 bg-slate-900/85 px-2.5 py-1 text-[11px] font-medium text-slate-200">
+          {{ remoteStatusText }}
+        </div>
+        <div
+          v-if="remoteTeleprompter.connectedHidName.value"
+          class="truncate text-[11px] font-medium text-slate-400"
+        >
+          HID: {{ remoteTeleprompter.connectedHidName.value }}
         </div>
       </div>
 
