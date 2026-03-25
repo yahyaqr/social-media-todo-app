@@ -153,6 +153,26 @@ const goToContentIdeation = async (): Promise<void> => {
   await router.push({ name: 'content-ideation' });
 };
 
+const hardRefresh = async (): Promise<void> => {
+  closeProfile();
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+
+    if ('caches' in window) {
+      const cacheKeys = await window.caches.keys();
+      await Promise.all(cacheKeys.map((cacheKey) => window.caches.delete(cacheKey)));
+    }
+  } catch {
+    // Fall back to a regular reload if cache or service worker cleanup fails.
+  }
+
+  window.location.reload();
+};
+
 const signOut = async (): Promise<void> => {
   try {
     await authStore.signOutCurrentUser();
@@ -261,6 +281,13 @@ const signOut = async (): Promise<void> => {
         @click="goToContentIdeation"
       >
         Content Outlining
+      </button>
+      <button
+        type="button"
+        class="mt-2 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+        @click="hardRefresh"
+      >
+        Hard Refresh
       </button>
       <button
         type="button"
