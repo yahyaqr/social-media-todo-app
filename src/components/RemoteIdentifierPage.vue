@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 
 type RemoteLogEntry = {
   timestamp: string;
-  type: 'status' | 'keydown' | 'hid' | 'error';
+  type: 'status' | 'keyboard' | 'pointer' | 'input' | 'gamepad' | 'hid' | 'error';
   payload: Record<string, unknown>;
 };
 
@@ -57,7 +57,10 @@ const remoteDetectedCount = ref(0);
 const isConnectingHid = ref(false);
 const connectedHidName = ref<string | null>(null);
 const hidSupportAvailable = computed(() => typeof navigator !== 'undefined' && 'hid' in navigator);
+const gamepadSupportAvailable = computed(() => typeof navigator !== 'undefined' && 'getGamepads' in navigator);
 let connectedHidDevice: HidDeviceLike | null = null;
+let gamepadPollFrameId: number | null = null;
+let lastGamepadSnapshot = '';
 
 const writeRemoteLog = (type: RemoteLogEntry['type'], payload: Record<string, unknown>): void => {
   const timestamp = new Date().toLocaleTimeString([], {
@@ -76,12 +79,13 @@ const writeRemoteLog = (type: RemoteLogEntry['type'], payload: Record<string, un
   ].slice(0, REMOTE_LOG_LIMIT);
 };
 
-const handleRemoteKeydown = (event: KeyboardEvent): void => {
+const handleKeyboardEvent = (event: KeyboardEvent): void => {
   if (!isRemoteListening.value) {
     return;
   }
 
   const payload = {
+    eventType: event.type,
     key: event.key,
     code: event.code,
     keyCode: event.keyCode,
@@ -93,7 +97,7 @@ const handleRemoteKeydown = (event: KeyboardEvent): void => {
     repeat: event.repeat
   };
 
-  writeRemoteLog('keydown', payload);
+  writeRemoteLog('keyboard', payload);
 
   if (supportedRemoteKeys.has(event.key)) {
     lastRemoteKey.value = event.key;
@@ -105,27 +109,134 @@ const handleRemoteKeydown = (event: KeyboardEvent): void => {
   }
 };
 
+const handlePointerEvent = (event: Event): void => {
+  if (!isRemoteListening.value) {
+    return;
+  }
+
+  const pointerEvent = event as PointerEvent;
+  writeRemoteLog('pointer', {
+    eventType: event.type,
+    pointerType: pointerEvent.pointerType ?? 'unknown',
+    button: 'button' in pointerEvent ? pointerEvent.button : null,
+    buttons: 'buttons' in pointerEvent ? pointerEvent.buttons : null,
+    isTrusted: event.isTrusted
+  });
+};
+
+const handleInputEvent = (event: Event): void => {
+  if (!isRemoteListening.value) {
+    return;
+  }
+
+  const target = event.target as HTMLElement | null;
+  writeRemoteLog('input', {
+    eventType: event.type,
+    tagName: target?.tagName ?? null,
+    id: target?.id ?? null,
+    className: target?.className ?? null,
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus()
+  });
+};
+
+const handleVisibilityOrFocusEvent = (event: Event): void => {
+  if (!isRemoteListening.value) {
+    return;
+  }
+
+  writeRemoteLog('status', {
+    eventType: event.type,
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus()
+  });
+};
+
+const pollGamepads = (): void => {
+  if (!isRemoteListening.value || !gamepadSupportAvailable.value) {
+    gamepadPollFrameId = null;
+    return;
+  }
+
+  const gamepads = navigator.getGamepads?.() ?? [];
+  const snapshot = gamepads
+    .filter((gamepad): gamepad is Gamepad => Boolean(gamepad))
+    .map((gamepad) => ({
+      index: gamepad.index,
+      id: gamepad.id,
+      mapping: gamepad.mapping,
+      connected: gamepad.connected,
+      pressedButtons: gamepad.buttons
+        .map((button, index) => ({ index, pressed: button.pressed, value: button.value }))
+        .filter((button) => button.pressed || button.value !== 0),
+      axes: gamepad.axes.map((value, index) => ({ index, value })).filter((axis) => Math.abs(axis.value) > 0.15)
+    }))
+    .filter((gamepad) => gamepad.pressedButtons.length || gamepad.axes.length);
+
+  const nextSnapshot = JSON.stringify(snapshot);
+  if (snapshot.length && nextSnapshot !== lastGamepadSnapshot) {
+    lastGamepadSnapshot = nextSnapshot;
+    remoteDetectedCount.value += 1;
+    writeRemoteLog('gamepad', { gamepads: snapshot });
+  }
+
+  gamepadPollFrameId = window.requestAnimationFrame(pollGamepads);
+};
+
+const startGamepadPolling = (): void => {
+  if (!gamepadSupportAvailable.value || gamepadPollFrameId !== null) {
+    return;
+  }
+
+  lastGamepadSnapshot = '';
+  gamepadPollFrameId = window.requestAnimationFrame(pollGamepads);
+};
+
+const stopGamepadPolling = (): void => {
+  if (gamepadPollFrameId !== null) {
+    window.cancelAnimationFrame(gamepadPollFrameId);
+    gamepadPollFrameId = null;
+  }
+};
+
 const startRemoteListening = (): void => {
   if (remoteListenerAttached.value) {
     isRemoteListening.value = true;
+    startGamepadPolling();
     writeRemoteLog('status', { status: 'listening-resumed' });
     return;
   }
 
-  window.addEventListener('keydown', handleRemoteKeydown, { passive: false });
+  window.addEventListener('keydown', handleKeyboardEvent, { capture: true, passive: false });
+  window.addEventListener('keyup', handleKeyboardEvent, { capture: true, passive: false });
+  window.addEventListener('keypress', handleKeyboardEvent, { capture: true, passive: false });
+  window.addEventListener('pointerdown', handlePointerEvent, { capture: true, passive: true });
+  window.addEventListener('pointerup', handlePointerEvent, { capture: true, passive: true });
+  window.addEventListener('click', handleInputEvent, { capture: true, passive: true });
+  window.addEventListener('auxclick', handleInputEvent, { capture: true, passive: true });
+  window.addEventListener('beforeinput', handleInputEvent, { capture: true, passive: true });
+  window.addEventListener('input', handleInputEvent, { capture: true, passive: true });
+  window.addEventListener('focus', handleVisibilityOrFocusEvent, { capture: true, passive: true });
+  window.addEventListener('blur', handleVisibilityOrFocusEvent, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', handleVisibilityOrFocusEvent, { passive: true });
+  window.addEventListener('gamepadconnected', handleInputEvent, { passive: true });
+  window.addEventListener('gamepaddisconnected', handleInputEvent, { passive: true });
   remoteListenerAttached.value = true;
   isRemoteListening.value = true;
+  startGamepadPolling();
   writeRemoteLog('status', { status: 'listening' });
 };
 
 const stopRemoteListening = (): void => {
   isRemoteListening.value = false;
+  stopGamepadPolling();
   writeRemoteLog('status', { status: 'paused' });
 };
 
 const clearRemoteLog = (): void => {
   remoteLog.value = [];
   lastRemoteKey.value = null;
+  lastGamepadSnapshot = '';
   remoteDetectedCount.value = 0;
 };
 
@@ -192,9 +303,24 @@ const connectHidDevice = async (): Promise<void> => {
 
 onBeforeUnmount(() => {
   if (remoteListenerAttached.value) {
-    window.removeEventListener('keydown', handleRemoteKeydown);
+    window.removeEventListener('keydown', handleKeyboardEvent, { capture: true });
+    window.removeEventListener('keyup', handleKeyboardEvent, { capture: true });
+    window.removeEventListener('keypress', handleKeyboardEvent, { capture: true });
+    window.removeEventListener('pointerdown', handlePointerEvent, { capture: true });
+    window.removeEventListener('pointerup', handlePointerEvent, { capture: true });
+    window.removeEventListener('click', handleInputEvent, { capture: true });
+    window.removeEventListener('auxclick', handleInputEvent, { capture: true });
+    window.removeEventListener('beforeinput', handleInputEvent, { capture: true });
+    window.removeEventListener('input', handleInputEvent, { capture: true });
+    window.removeEventListener('focus', handleVisibilityOrFocusEvent, { capture: true });
+    window.removeEventListener('blur', handleVisibilityOrFocusEvent, { capture: true });
+    document.removeEventListener('visibilitychange', handleVisibilityOrFocusEvent);
+    window.removeEventListener('gamepadconnected', handleInputEvent);
+    window.removeEventListener('gamepaddisconnected', handleInputEvent);
     remoteListenerAttached.value = false;
   }
+
+  stopGamepadPolling();
 
   if (connectedHidDevice) {
     connectedHidDevice.removeEventListener('inputreport', handleHidInputReport);
@@ -299,10 +425,19 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
+        <div class="rounded-2xl border border-dashed border-slate-300 px-3 py-3">
+          <p class="text-sm font-semibold text-slate-900">
+            Gamepad probe
+          </p>
+          <p class="mt-1 text-xs leading-5 text-slate-500">
+            {{ gamepadSupportAvailable ? 'Polling navigator.getGamepads() while listening.' : 'Gamepad API not supported in this browser.' }}
+          </p>
+        </div>
+
         <div class="rounded-2xl bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-          Supported keys:
+          Broad listeners enabled:
           <span class="font-medium text-slate-900">
-            Camera, CameraFocus, HeadsetHook, MediaPlayPause, AudioVolumeUp, AudioVolumeDown, AudioVolumeMute, Unidentified
+            keydown, keyup, keypress, pointerdown, pointerup, click, auxclick, beforeinput, input, focus, blur, visibilitychange, gamepad polling, WebHID
           </span>
         </div>
 
